@@ -78,12 +78,28 @@ python -m pytest -q                 # alle tests moeten slagen voor een analyse
 
 # live data (SEC eist een User-Agent met contactadres)
 export EQUITY_RESEARCH_USER_AGENT="equity-research naam@voorbeeld.nl"
-python -m equity_research.data AAPL
+python -m equity_research.data AAPL           # ruwe SEC-reeksen
+python -m equity_research.fundamentals AAPL   # jaarcijfers, ratio's, groei, checks, datakwaliteit
+python -m equity_research.fundamentals AAPL --as-of 2020-01-01   # point-in-time
+python -m equity_research.valuation AAPL      # DCF, scenario's, gevoeligheid, reverse DCF
+python -m equity_research.valuation AAPL --industry "<Damodaran-industrie>"   # bottom-up beta
+python -m equity_research.risk AAPL           # Piotroski, Altman, Beneish, marktrisico, screens
 ```
+
+- Koers (Stooq), ERP en sectorbeta (Damodaran) mogen bij een geblokkeerde bron alleen met bron
+  worden ingevoerd: `--price 231.50 --price-source "Nasdaq official close 2026-10-08"` (idem
+  `--beta`, `--erp`, `--cost-of-debt`). Nooit een waarde uit het geheugen invullen.
+- De Stooq- en Damodaran-parsers zijn gebouwd zonder live toegang: controleer bij het eerste
+  live gebruik de uitkomst tegen de webpagina en pas zo nodig de parser + tests aan.
 
 - SEC-specifiek: gebruik `CompanyFacts.annual(..., as_of=...)` -- per periode de laatst
   ingediende waarde die op `as_of` publiek was (herziene cijfers tellen pas vanaf hun
   indieningsdatum). Comparatieve cijfers in latere 10-K's zijn geen nieuwe data.
+- Aandelenaantallen en per-aandeelcijfers zijn niet split-gecorrigeerd: de laatste filing per
+  periode kan van vóór een split zijn (AAPL: 7:1 in 2014, 4:1 in 2020 geven gemengde reeksen).
+  `fundamentals.build_annual` herkent splits uit de filings zelf en corrigeert; vermeld ze in
+  "Datakwaliteit". `fy`/`fp` van EDGAR horen bij de filing, niet bij de periode
+  (`filing_fiscal_year`); selecteer periodes op `period_end`.
 - Q4 staat niet los in EDGAR: Q4 = boekjaar − 9 maanden YTD. YTD-regels nooit als kwartaal lezen.
 - Banken, verzekeraars en REITs (SIC 6000-6799) krijgen geen Altman Z en een aangepaste
   DCF (dividend/excess-return model); controleer de SIC-code uit `SecEdgar.profile`.

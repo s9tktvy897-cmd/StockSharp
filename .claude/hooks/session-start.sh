@@ -20,7 +20,7 @@ check() {
 }
 
 echo "equity-research: Python package installed (python -m pytest -q in equity-research/)."
-echo "equity-research: network -> data.sec.gov $(check https://data.sec.gov/), www.sec.gov $(check https://www.sec.gov/files/company_tickers.json), fred.stlouisfed.org $(check https://fred.stlouisfed.org/)"
+echo "equity-research: network -> data.sec.gov $(check https://data.sec.gov/), www.sec.gov $(check https://www.sec.gov/files/company_tickers.json), fred.stlouisfed.org $(check https://fred.stlouisfed.org/), stooq.com $(check https://stooq.com/), pages.stern.nyu.edu $(check https://pages.stern.nyu.edu/~adamodar/)"
 if [ -z "${EQUITY_RESEARCH_USER_AGENT:-}" ]; then
   echo "equity-research: EQUITY_RESEARCH_USER_AGENT is NOT set -- live SEC requests will fail; tell the user to add it to the environment variables."
 fi

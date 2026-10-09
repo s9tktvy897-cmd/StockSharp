@@ -105,3 +105,10 @@ def test_dei_shares(facts):
     shares = facts.annual("EntityCommonStockSharesOutstanding", unit="shares", taxonomy="dei")
     assert _values(shares) == [(date(2025, 2, 1), 100.0)]
     assert shares[0].currency is None
+
+
+def test_fiscal_year_describes_the_filing_not_the_period(facts):
+    restated_2023 = facts.annual("Revenues")[1]
+    assert restated_2023.period_end == date(2023, 12, 31)
+    assert restated_2023.filing_fiscal_year == 2024
+    assert restated_2023.filing_fiscal_period == "FY"

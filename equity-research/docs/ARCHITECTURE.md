@@ -30,11 +30,11 @@ Every number either comes from a cited source or is computed from such numbers.
 | Module | Responsibility | Phase |
 |---|---|---|
 | `provenance.py` | `SourcedValue`, `Assumption`: value + source metadata; missing data is explicit | 0 |
-| `data/` | ✅ SEC EDGAR (ticker→CIK, profile/SIC, company facts with point-in-time `annual`/`quarterly`), ✅ FRED CSV, ✅ disk cache, rate limit, retries. Prices and Damodaran: phase 4 | 1 |
-| `fundamentals/` | Map XBRL tags → normalized income/balance/cash-flow statements; ratios, CAGR, ROIC, FCF | 2 |
-| `valuation/` | WACC (CAPM), 2-stage FCFF DCF, terminal value (Gordon + exit multiple), reverse DCF, sensitivity grid, scenarios, multiples | 3 |
-| `risk/` | Altman Z (Z, Z', Z''), Beneish M, Piotroski F, volatility, beta, max drawdown, leverage | 4 |
-| `screening/` | Value and growth screens built from the above, thresholds from `METHODOLOGY.md` | 4 |
+| `data/` | ✅ SEC EDGAR (ticker→CIK, profile/SIC, company facts with point-in-time `annual`/`quarterly`/`history`), ✅ FRED CSV, ✅ disk cache, rate limit, retries. Stooq prices and Damodaran (ERP, industry betas): built on synthetic fixtures, not yet verified live | 1, 3 |
+| `fundamentals/` | ✅ XBRL tags → normalized annual statements (tag fallbacks, split detection/adjustment, point-in-time), ratios, CAGR, ROIC, FCF, consistency checks, TTM and latest balance sheet from 10-Qs | 2, 3 |
+| `valuation/` | ✅ `run.py` (end-to-end valuation, reused by risk/report), WACC (CAPM, Hamada), 2-stage FCFF DCF with fade, terminal value (Gordon + implied exit multiple), reverse DCF, sensitivity grid, bear/base/bull from history, market multiples. Peer multiples: later | 3 |
+| `risk/` | ✅ beta, volatility, max drawdown (`market.py`); ✅ Piotroski F, Altman Z / Z'' (variant by SIC), Beneish M (`scores.py`) | 3, 4 |
+| `screening/` | ✅ Value and growth screens (three-valued), thresholds from `METHODOLOGY.md`. Multi-ticker universe screen: phase 5 | 4 |
 | `backtest/` | Point-in-time screen replay, forward returns vs benchmark, hit rate, IC, drawdown; bias checklist | 5 |
 | `report/` | Markdown report: facts, assumptions, valuation, risks, data-quality section | 6 |
 | `cli.py` | `equity-research analyze AAPL`, `screen`, `backtest` | 6 |
@@ -50,7 +50,7 @@ Every number either comes from a cited source or is computed from such numbers.
 
 ## Environment note
 
-In the cloud session where this was scaffolded, the egress proxy blocked `data.sec.gov`;
-PyPI was reachable. Data adapters must therefore be developed against recorded fixtures,
-and live fetching needs either a local run or the host added to the environment's network
-allowlist.
+Tests use synthetic fixtures only (`tests/fakes.py`), so they run without network access.
+Live fetching needs `data.sec.gov`, `www.sec.gov`, `fred.stlouisfed.org`, `stooq.com` and
+`pages.stern.nyu.edu` reachable and `EQUITY_RESEARCH_USER_AGENT` set; the SessionStart hook
+reports both. Without Stooq/Damodaran the valuation shows value per share over a WACC range.

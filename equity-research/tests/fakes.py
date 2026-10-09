@@ -106,3 +106,56 @@ SYNTHETIC_COMPANY_FACTS = {
 }
 
 SYNTHETIC_FRED_DGS10 = "observation_date,DGS10\n2026-10-01,4.00\n2026-10-02,4.10\n2026-10-05,.\n2026-10-06,\n"
+
+
+# --- Fundamentals fixture (SYNTHETIC). Fiscal years end Dec 31.
+# Revenue switches tag in FY2022 (Revenues -> RevenueFromContract...), a 2:1 split happens between
+# the FY2023 10-K (filed 2024-02-15) and the FY2024 10-K (filed 2025-02-14), which restates FY2023.
+def _k(start, end, val, accn, filed):
+    return _row(start, end, val, accn, int(accn[1:]) + 2000, "FY", "10-K", filed)
+
+
+_K22, _K23, _K24 = ("K22", "2023-02-15"), ("K23", "2024-02-15"), ("K24", "2025-02-14")
+_FY = {2021: ("2021-01-01", "2021-12-31"), 2022: ("2022-01-01", "2022-12-31"),
+       2023: ("2023-01-01", "2023-12-31"), 2024: ("2024-01-01", "2024-12-31")}
+
+
+def _dur(values: dict[tuple[int, tuple[str, str]], float]) -> list[dict]:
+    return [_k(*_FY[fy], val, accn, filed) for (fy, (accn, filed)), val in values.items()]
+
+
+def _inst(values: dict[tuple[int, tuple[str, str]], float]) -> list[dict]:
+    return [_k(None, _FY[fy][1], val, accn, filed) for (fy, (accn, filed)), val in values.items()]
+
+
+def _usd(rows):
+    return {"units": {"USD": rows}}
+
+
+SYNTHETIC_FUNDAMENTALS = {
+    "us-gaap": {
+        "Revenues": _usd(_dur({(2021, _K22): 800, (2022, _K22): 900})),
+        "RevenueFromContractWithCustomerExcludingAssessedTax": _usd(_dur({
+            (2022, _K23): 900, (2023, _K23): 1000, (2023, _K24): 1000, (2024, _K24): 1100})),
+        "OperatingIncomeLoss": _usd(_dur({(2023, _K24): 200, (2024, _K24): 220})),
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest":
+            _usd(_dur({(2024, _K24): 210})),
+        "IncomeTaxExpenseBenefit": _usd(_dur({(2024, _K24): 42})),
+        "NetIncomeLoss": _usd(_dur({(2024, _K24): 168})),
+        "NetCashProvidedByUsedInOperatingActivities": _usd(_dur({(2024, _K24): 250})),
+        "PaymentsToAcquirePropertyPlantAndEquipment": _usd(_dur({(2024, _K24): 50})),
+        "Assets": _usd(_inst({(2023, _K24): 1500, (2024, _K24): 1700})),
+        "Liabilities": _usd(_inst({(2023, _K24): 1000, (2024, _K24): 1100})),
+        "StockholdersEquity": _usd(_inst({(2023, _K24): 500, (2024, _K24): 600})),
+        "LongTermDebtNoncurrent": _usd(_inst({(2023, _K24): 300, (2024, _K24): 300})),
+        "LongTermDebtCurrent": _usd(_inst({(2023, _K24): 50, (2024, _K24): 100})),
+        "CashAndCashEquivalentsAtCarryingValue": _usd(_inst({(2023, _K24): 100, (2024, _K24): 150})),
+        "MarketableSecuritiesCurrent": _usd(_inst({(2023, _K24): 50, (2024, _K24): 50})),
+        "MarketableSecuritiesNoncurrent": _usd(_inst({(2023, _K24): 100, (2024, _K24): 100})),
+        "WeightedAverageNumberOfDilutedSharesOutstanding": {"units": {"shares": _dur({
+            (2021, _K22): 105, (2022, _K22): 100, (2022, _K23): 100, (2023, _K23): 95,
+            (2023, _K24): 190, (2024, _K24): 180})}},
+        "EarningsPerShareDiluted": {"units": {"USD/shares": _dur({
+            (2022, _K22): 1.50, (2023, _K23): 1.20, (2023, _K24): 0.60, (2024, _K24): 0.70})}},
+    },
+}
