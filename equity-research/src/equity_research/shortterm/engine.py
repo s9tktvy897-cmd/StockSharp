@@ -29,6 +29,7 @@ class EngineResult:
     panel: Panel
     data_problems: dict[str, list[str]]
     oos: dict[int, OutOfSample] = field(default_factory=dict)
+    oos_drop: dict[int, OutOfSample] = field(default_factory=dict)  # same test for a fall of 10% or more
     backtests: dict[int, BacktestResult] = field(default_factory=dict)
     scanner_backtests: dict[int, BacktestResult] = field(default_factory=dict)
     production_model: dict[int, str] = field(default_factory=dict)
@@ -42,9 +43,9 @@ class EngineResult:
         return max(self.panel.dates) if len(self.panel.dates) else None
 
 
-def _production(panel: Panel, horizon: int, embargo_days: int):
+def _production(panel: Panel, horizon: int, embargo_days: int, target: str = "hit"):
     """Model for today: trained on everything before the last full year, chosen and calibrated on it."""
-    y = panel.outcomes[horizon]["hit"]
+    y = panel.outcomes[horizon][target]
     usable = panel.eligible & np.isfinite(y)
     if not np.any(usable):
         return None
@@ -64,13 +65,17 @@ def run(universe: dict[str, Bars], filings: dict[str, list[Filing]] | None, conf
     panel = build_panel(universe, filings, config, last_decision=scan_time)
     result = EngineResult(scan_time, config, bars_source, len(universe), panel, problems)
     if not len(panel.dates):
-        result.notes.append("no price history: nothing to scan or backtest")
+        result.notes.append("geen koershistorie: niets te scannen of te backtesten")
         return result
     if (scan_time.date() - result.latest_date).days > STALE_DAYS:
-        result.notes.append(f"latest bar {result.latest_date} is more than {STALE_DAYS} days before the scan")
+        result.notes.append(f"laatste koersdag {result.latest_date} ligt meer dan {STALE_DAYS} dagen voor de scan")
 
     probabilities: dict[int, np.ndarray | None] = {}
+    drop_probabilities: dict[int, np.ndarray | None] = {}
     for h in config.horizons:
+        result.oos_drop[h] = evaluation.out_of_sample(panel, h, config, target="drop")
+        drop_model = _production(panel, h, embargo_days=h + 3, target="drop") if result.oos_drop[h].gate.passed else None
+        drop_probabilities[h] = drop_model.predict(panel.X) if drop_model else None
         oos = evaluation.out_of_sample(panel, h, config)
         result.oos[h] = oos
         result.backtests[h] = backtest.run(panel, oos.scores, universe, config, h)
@@ -92,12 +97,13 @@ def run(universe: dict[str, Bars], filings: dict[str, list[Filing]] | None, conf
     scanner_ok = [h for h in sorted(config.horizons, reverse=True) if result.oos[h].scanner_gate.passed]
     if model_ok:
         h = model_ok[0]
-        ranking, result.ranked_by = probabilities[h], f"model score for {h} day(s) ({result.production_model[h]})"
+        ranking, result.ranked_by = probabilities[h], f"modelscore voor {h} dag(en) ({result.production_model[h]})"
     elif scanner_ok:
-        ranking, result.ranked_by = scanner_all, f"scanner rule (validated as a ranking for {scanner_ok[0]} day(s))"
+        ranking, result.ranked_by = scanner_all, f"scannerregel (gevalideerd als rangschikking voor {scanner_ok[0]} dag(en))"
     else:
-        ranking, result.ranked_by = scanner_all, "scanner rule (not validated)"
+        ranking, result.ranked_by = scanner_all, "scannerregel (niet gevalideerd)"
     result.candidates, notes = select(panel, ranking, result.ranked_by, probabilities, result.oos, result.backtests,
-                                      bars_source, names, filings, problems, config, bool(model_ok or scanner_ok))
+                                      bars_source, names, filings, problems, config, bool(model_ok or scanner_ok),
+                                      drop_probabilities)
     result.notes += notes
     return result

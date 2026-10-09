@@ -44,7 +44,7 @@ def _altman(r: ValuationRun, sources: Sources, year: date) -> AltmanLine:
     if variant == "Z''":
         return AltmanLine(scores.altman(r.st, year, "Z''"), None, True)
     try:
-        close = close_on_or_before(sources.stooq.daily_closes(r.ticker), year)
+        close = close_on_or_before(sources.closes(r.ticker), year)
         shares = r.st.get("diluted_shares", year)
         z = scores.altman(r.st, year, "Z", market_value_equity=close.value * shares.value if shares else None)
         note = None
@@ -63,7 +63,7 @@ def assess(r: ValuationRun, sources: Sources, years: int = YEARS) -> RiskAssessm
     out = RiskAssessment(fiscal, {y: scores.piotroski(r.st, y) for y in fiscal},
                          {y: _altman(r, sources, y) for y in fiscal}, {y: scores.beneish(r.st, y) for y in fiscal})
     try:
-        stock, index = sources.stooq.daily_closes(r.ticker), sources.stooq.daily_closes("^SPX")
+        stock, index = sources.closes(r.ticker), sources.closes("^SPX")
         five_years = [p.value for p in stock if (r.today - p.period_end).days <= 5 * 365]
         s, m = market.aligned_monthly_returns(stock, index, 60)
         out.market = {"volatility": market.annualized_volatility(s, 12), "max_drawdown": market.max_drawdown(five_years),

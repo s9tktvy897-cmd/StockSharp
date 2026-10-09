@@ -50,9 +50,10 @@ def main(argv: list[str] | None = None) -> None:
     for name in ("scan", "evaluate"):
         p = sub.add_parser(name)
         p.add_argument("--bars-dir", type=Path, help="directory with <TICKER>.csv (Date,Open,High,Low,Close,Volume)")
-        p.add_argument("--stooq", action="store_true", help="download daily bars from Stooq (secondary source)")
+        p.add_argument("--yahoo", action="store_true", help="daily bars from Yahoo Finance (default price source)")
+        p.add_argument("--stooq", action="store_true", help="daily bars from Stooq (secondary source)")
         p.add_argument("--tickers", help="comma-separated tickers (default: all NYSE/Nasdaq in the SEC list)")
-        p.add_argument("--max-tickers", type=int)
+        p.add_argument("--max-tickers", type=int, default=0, help="0 = every NYSE/Nasdaq listing")
         p.add_argument("--no-sec", action="store_true", help="skip SEC 8-K catalysts")
         p.add_argument("--output-dir", type=Path, default=REPORTS)
         p.add_argument("--context", type=Path, help="Markdown with sourced web context (each bullet: URL + date)")
@@ -73,7 +74,8 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     tickers = [t.strip() for t in args.tickers.split(",")] if args.tickers else None
-    data = load(tickers, args.bars_dir, args.stooq, not args.no_sec, sources, args.max_tickers)
+    use_yahoo = args.yahoo or not (args.bars_dir or args.stooq)
+    data = load(tickers, args.bars_dir, args.stooq, not args.no_sec, sources, args.max_tickers, use_yahoo=use_yahoo)
     if args.command == "evaluate":
         result = predictions.evaluate(predictions.read(PREDICTIONS), data.bars, config)
         for h, v in result.items():

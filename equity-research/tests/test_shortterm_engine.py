@@ -24,10 +24,10 @@ def test_planted_pattern_gives_ranked_candidates_with_probabilities():
 def test_noise_gives_no_candidates_and_says_why():
     r = _run(False, 11)
     assert r.candidates == []
-    assert any("no ranking passed" in n for n in r.notes)
+    assert any("geen rangschikking slaagde" in n for n in r.notes)
     assert r.raw_scanner  # shown separately as not validated
 
 
 def test_empty_universe():
     r = engine.run({}, None, Config(), {}, "none", datetime(2026, 10, 9, tzinfo=timezone.utc))
-    assert r.candidates == [] and "no price history" in r.notes[0]
+    assert r.candidates == [] and "geen koershistorie" in r.notes[0]

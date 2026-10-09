@@ -26,6 +26,7 @@ class Candidate:
     source: str
     score: float
     probability: dict[int, float | None]
+    drop_probability: dict[int, float | None]
     history: dict[int, dict]  # out-of-sample top-N stats per horizon
     signals: dict[str, float]
     catalysts: list[Filing] = field(default_factory=list)
@@ -44,7 +45,8 @@ def _window_filings(filings: list[Filing], day: date, days: int = 7) -> list[Fil
 def select(panel: Panel, ranking: np.ndarray, ranked_by: str, probabilities: dict[int, np.ndarray | None],
            oos: dict[int, OutOfSample], backtests: dict[int, BacktestResult], source: str, names: dict[str, str],
            filings: dict[str, list[Filing]] | None, data_problems: dict[str, list[str]], config: Config,
-           allowed: bool) -> tuple[list[Candidate], list[str]]:
+           allowed: bool, drop_probabilities: dict[int, np.ndarray | None] | None = None
+           ) -> tuple[list[Candidate], list[str]]:
     """Returns the candidates and the reasons why the list is short or empty."""
     notes = []
     if not len(panel.dates):
@@ -61,9 +63,10 @@ def select(panel: Panel, ranking: np.ndarray, ranked_by: str, probabilities: dic
             continue
         keep.append(row)
     if excluded:
-        notes.append(f"{excluded} stocks left out for data problems or a delisting/bankruptcy/non-reliance 8-K")
+        notes.append(f"{excluded} aandelen uitgesloten wegens datafouten of een 8-K over delisting, faillissement of "
+                     "onbetrouwbare eerdere cijfers")
     if not allowed:
-        notes.append("no ranking passed the out-of-sample test, so no stock qualifies as a candidate")
+        notes.append("geen rangschikking slaagde voor de toets buiten de trainingsdata, dus geen enkel aandeel is kandidaat")
         return [], notes
 
     out = []
@@ -73,26 +76,35 @@ def select(panel: Panel, ranking: np.ndarray, ranked_by: str, probabilities: dic
         recent = _window_filings((filings or {}).get(ticker, []), latest)
         probability = {h: (float(p[row]) if p is not None and oos[h].gate.passed else None)
                        for h, p in probabilities.items()}
+        drop_probability = {h: (float(p[row]) if p is not None else None)
+                            for h, p in (drop_probabilities or {}).items()}
         history = {h: backtests[h].summary for h in backtests}
-        risks = [f"typical daily range (ATR) {signals['atr_pct']:.1%} of the price"]
+        pct = lambda x: f"{x * 100:.1f}%".replace(".", ",")
+        risks = [f"gemiddelde dagbeweging (ATR) {pct(signals['atr_pct'])} van de koers"]
         h_max = max(backtests)
         if backtests[h_max].summary.get("trades"):
             s = backtests[h_max].summary
-            risks.append(f"in the backtest {s['drop_rate']:.1%} of the top picks fell 10% or more within {h_max} day(s)")
+            risks.append(f"in de backtest daalde {pct(s['drop_rate'])} van de top-picks binnen {h_max} dag(en) 10% of meer")
         if signals["gap"] > 0.05 or signals["ret_1d"] > 0.10:
-            risks.append("already up sharply: part of the move may be priced in (mean reversion risk)")
+            risks.append("al sterk gestegen: een deel van de beweging kan al in de koers zitten (terugvalrisico)")
         spread = config.costs.per_side(panel.dollar_volume[row])
-        risks.append(f"assumed cost {spread:.2%} per side (liquidity tier of {panel.dollar_volume[row] / 1e6:,.0f}M USD/day)")
+        risks.append(f"aangenomen kosten {pct(spread).replace(',0%', '%')} per kant "
+                     f"(liquiditeit {panel.dollar_volume[row] / 1e6:,.0f} mln USD/dag)".replace(",", "."))
         for f in recent:
             if set(f.items) & cat.NEGATIVE:
-                risks.append(f"8-K {cat.leaning(f.items)} on {f.accepted_et:%Y-%m-%d}")
+                risks.append(f"8-K {cat.leaning(f.items)} op {f.accepted_et:%Y-%m-%d}")
         validated = [h for h, p in probability.items() if p is not None]
-        conclusion = (f"#{rank} by {ranked_by}. "
-                      + (f"Calibrated probability available for {', '.join(f'{h}d' for h in validated)}. " if validated
-                         else "No validated probability: ranking only. ")
-                      + "A candidate for research, not a trade instruction.")
+        up = max((p for p in probability.values() if p is not None), default=None)
+        down = max((p for p in drop_probability.values() if p is not None), default=None)
+        conclusion = (f"#{rank} op {ranked_by}. "
+                      + (f"Gekalibreerde kans beschikbaar voor {', '.join(f'{h}d' for h in validated)}. " if validated
+                         else "Geen gevalideerde kans: alleen een rangschikking. ")
+                      + ("De kans op een daling van 10% of meer is vergelijkbaar of groter: vooral een beweeglijk "
+                         "aandeel, geen richting. " if up is not None and down is not None and down >= 0.75 * up else "")
+                      + "Een kandidaat voor onderzoek, geen handelsopdracht.")
         out.append(Candidate(rank, ticker, names.get(ticker, ""), float(panel.price[row]), latest, source,
-                             float(ranking[row]), probability, history, signals, recent, risks, conclusion))
+                             float(ranking[row]), probability, drop_probability, history, signals, recent, risks,
+                             conclusion))
     if len(out) < config.top_n:
-        notes.append(f"{len(out)} of at most {config.top_n} stocks met the conditions")
+        notes.append(f"{len(out)} van maximaal {config.top_n} aandelen voldeden aan de voorwaarden")
     return out, notes

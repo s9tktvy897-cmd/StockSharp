@@ -1,7 +1,7 @@
 """``python -m equity_research.risk AAPL [valuation options]`` -- quality, risk and screens.
 
 Piotroski F, Altman Z (variant by SIC) and Beneish M for the last fiscal years, market risk from
-prices (Stooq), and the undervalued/growth screens of docs/METHODOLOGY.md."""
+prices (Yahoo Finance or Stooq), and the undervalued/growth screens of docs/METHODOLOGY.md."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def print_assessment(r: ValuationRun, a: RiskAssessment) -> None:
             print(f"  FY{y.year}: {m.value:.2f} ({'FLAG' if m.flagged else 'below threshold'})  "
                   + ", ".join(f"{k} {v:.3f}" for k, v in m.components.items()))
 
-    print("\n## Market risk (prices: Stooq, secondary)")
+    print("\n## Market risk (prices: Yahoo Finance or Stooq, secondary)")
     if a.market:
         print(f"  volatility ({a.market['months']} monthly returns, annualized) {a.market['volatility']:.1%}")
         print(f"  max drawdown (5 years of daily closes) {a.market['max_drawdown']:.1%}")

@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 
 SPLIT_RATIOS = (2, 3, 4, 5, 7, 8, 10, 20)
+TOLERANCE = 0.005  # adjusted prices carry rounding noise; only larger inconsistencies are errors
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,9 @@ class Bars:
 
 
 def parse_ohlcv_csv(text: str, ticker: str, source: str) -> Bars:
+    if text.lstrip().lower().startswith(("<!doctype", "<html")):
+        hint = "a JavaScript bot check" if "javascript" in text.lower() else "an HTML page"
+        raise ValueError(f"{ticker}: {source} returned {hint} instead of CSV data")
     reader = csv.DictReader(io.StringIO(text.strip()))
     fields = {name.lower(): name for name in reader.fieldnames or []}
     needed = ("date", "open", "high", "low", "close", "volume")
@@ -73,10 +77,12 @@ def validate(bars: Bars) -> list[str]:
         problems.append(f"{t}: dates not strictly increasing")
     if np.any(np.minimum.reduce([bars.open, bars.high, bars.low, bars.close]) <= 0):
         problems.append(f"{t}: non-positive prices")
-    if np.any(bars.high < np.maximum(bars.open, bars.close) - 1e-9):
-        problems.append(f"{t}: high below open/close on {int(np.sum(bars.high < np.maximum(bars.open, bars.close) - 1e-9))} days")
-    if np.any(bars.low > np.minimum(bars.open, bars.close) + 1e-9):
-        problems.append(f"{t}: low above open/close on {int(np.sum(bars.low > np.minimum(bars.open, bars.close) + 1e-9))} days")
+    high_bad = bars.high < np.maximum(bars.open, bars.close) * (1 - TOLERANCE)
+    low_bad = bars.low > np.minimum(bars.open, bars.close) * (1 + TOLERANCE)
+    if np.any(high_bad):
+        problems.append(f"{t}: high below open/close on {int(np.sum(high_bad))} days")
+    if np.any(low_bad):
+        problems.append(f"{t}: low above open/close on {int(np.sum(low_bad))} days")
     if np.any(bars.volume < 0):
         problems.append(f"{t}: negative volume")
     ratio = bars.close[1:] / bars.close[:-1]

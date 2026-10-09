@@ -23,7 +23,7 @@ check() {
   [ "${code:-000}" = "000" ] && echo "BLOCKED" || echo "ok"
 }
 
-echo "equity-research: network -> data.sec.gov $(check https://data.sec.gov/), www.sec.gov $(check https://www.sec.gov/files/company_tickers.json), fred.stlouisfed.org $(check https://fred.stlouisfed.org/), stooq.com $(check https://stooq.com/), pages.stern.nyu.edu $(check https://pages.stern.nyu.edu/~adamodar/)"
+echo "equity-research: network -> data.sec.gov $(check https://data.sec.gov/), www.sec.gov $(check https://www.sec.gov/files/company_tickers.json), fred.stlouisfed.org $(check https://fred.stlouisfed.org/), query1.finance.yahoo.com $(check https://query1.finance.yahoo.com/), stooq.com $(check https://stooq.com/), pages.stern.nyu.edu $(check https://pages.stern.nyu.edu/~adamodar/)"
 if [ -z "${EQUITY_RESEARCH_USER_AGENT:-}" ]; then
   echo "equity-research: EQUITY_RESEARCH_USER_AGENT is NOT set -- live SEC requests will fail; tell the user to add it to the environment variables."
 fi

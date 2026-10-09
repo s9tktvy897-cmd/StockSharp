@@ -47,6 +47,9 @@ def build_panel(universe: dict[str, Bars], filings: dict[str, list[Filing]] | No
         out = labels.compute(bars, config)
         keep = np.arange(len(bars)) >= config.min_history - 1
         keep &= np.isfinite(f["rvol"]) & np.isfinite(f["dollar_volume_20"])
+        # Only tradable rows enter the panel (keeps a full-market panel small enough for memory).
+        with np.errstate(invalid="ignore"):
+            keep &= (bars.close >= config.min_price) & (f["dollar_volume_20"] >= config.min_dollar_volume)
         idx = np.where(keep)[0]
         blocks.append((ticker, bars, f, out, idx))
     if not blocks:
@@ -54,7 +57,10 @@ def build_panel(universe: dict[str, Bars], filings: dict[str, list[Filing]] | No
                      np.array([]), np.array([], dtype=int), {h: {} for h in config.horizons}, np.array([], dtype=bool),
                      np.array([]), np.array([]), filings is not None, excluded)
 
-    X = np.vstack([np.column_stack([f[name][idx] for name in names]) for _, _, f, _, idx in blocks])
+    blocks = [b for b in blocks if len(b[4])]
+    if not blocks:
+        return build_panel({}, filings, config, last_decision)
+    X = np.vstack([np.column_stack([f[name][idx] for name in names]).astype(np.float32) for _, _, f, _, idx in blocks])
     dates = np.concatenate([bars.dates[idx] for _, bars, _, _, idx in blocks])
     tickers = np.concatenate([np.full(len(idx), t, dtype=object) for t, _, _, _, idx in blocks])
     rows = np.concatenate([idx for *_, idx in blocks])
@@ -72,7 +78,7 @@ def build_panel(universe: dict[str, Bars], filings: dict[str, list[Filing]] | No
     for group in np.split(order, bounds):
         with np.errstate(all="ignore"):
             market[group] = [np.nanmedian(ret1[group]), np.nanmedian(ret20[group]), np.nanmean(ret1[group] > 0)]
-    X = np.column_stack([X, market])
+    X = np.column_stack([X, market.astype(np.float32)])
     eligible = (price >= config.min_price) & (dollar >= config.min_dollar_volume)
     return Panel(X, names + list(MARKET_FEATURES), dates, tickers, rows, outcomes, eligible, price, dollar,
                  filings is not None, excluded)

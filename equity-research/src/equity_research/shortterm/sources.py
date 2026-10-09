@@ -24,6 +24,15 @@ EXCHANGE_TICKERS_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 LISTED = ("Nasdaq", "NYSE")
 
 
+NON_COMMON_SUFFIXES = {"WT", "WS", "W", "UN", "U", "RT", "R"}
+
+
+def is_common_stock(ticker: str) -> bool:
+    """Leaves out warrants, units and rights (``AAC-WT``, ``AAC-UN``); share classes (``BRK-B``) stay."""
+    _, _, suffix = ticker.upper().partition("-")
+    return suffix not in NON_COMMON_SUFFIXES
+
+
 @dataclass
 class Listing:
     ticker: str
@@ -56,7 +65,7 @@ class ShortTermSources:
         out = {}
         for row in data["data"]:
             r = dict(zip(cols, row))
-            if r["exchange"] in LISTED:
+            if r["exchange"] in LISTED and is_common_stock(r["ticker"]):
                 out[r["ticker"].upper()] = Listing(r["ticker"].upper(), format_cik(r["cik"]), r["name"], r["exchange"])
         return out
 
@@ -93,7 +102,10 @@ class ShortTermSources:
 
 
 def load(tickers: list[str] | None, bars_dir: Path | None, use_stooq: bool, use_sec: bool,
-         sources: ShortTermSources | None = None, max_tickers: int | None = None) -> LoadResult:
+         sources: ShortTermSources | None = None, max_tickers: int | None = None, use_yahoo: bool = False,
+         yahoo=None) -> LoadResult:
+    """Bars from (in this order of preference) a CSV directory, Yahoo Finance or Stooq; the default
+    universe is every NYSE/Nasdaq listing in the SEC ticker file. ``max_tickers`` 0/None = all."""
     result = LoadResult()
     sources = sources or ShortTermSources()
     listings: dict[str, Listing] = {}
@@ -107,6 +119,21 @@ def load(tickers: list[str] | None, bars_dir: Path | None, use_stooq: bool, use_
         result.bars_source = f"local CSV files in {bars_dir}"
         if tickers:
             result.bars = {t: b for t, b in result.bars.items() if t in {x.upper() for x in tickers}}
+    elif use_yahoo:
+        from equity_research.data.yahoo import YahooPrices
+
+        universe = [t.upper() for t in tickers] if tickers else sorted(listings)
+        universe = universe[:max_tickers] if max_tickers else universe
+        provider = yahoo or YahooPrices(CACHE_DIR)
+        result.bars_source = "Yahoo Finance via yfinance (secondary; split- and dividend-adjusted)"
+        try:
+            result.bars, problems = provider.bars(universe)
+        except Exception as error:  # noqa: BLE001 -- report any provider failure, never fill in
+            result.missing.append(f"Yahoo Finance: {error}")
+            problems = []
+        if problems:
+            result.missing.append(f"Yahoo Finance: no bars for {len(problems)} of {len(universe)} tickers "
+                                  f"(e.g. {'; '.join(problems[:3])})")
     elif use_stooq:
         universe = [t.upper() for t in tickers] if tickers else sorted(listings)
         universe = universe[:max_tickers] if max_tickers else universe
@@ -125,7 +152,7 @@ def load(tickers: list[str] | None, bars_dir: Path | None, use_stooq: bool, use_
         if failures > 3:
             result.missing.append(f"Stooq bars missing for {failures} tickers in total")
     else:
-        result.missing.append("no price source given (use --bars-dir or --stooq)")
+        result.missing.append("no price source given (use --yahoo, --bars-dir or --stooq)")
 
     result.names = {t: listings[t].name for t in result.bars if t in listings}
     if use_sec:

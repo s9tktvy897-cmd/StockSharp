@@ -19,8 +19,8 @@ guarantees. Code: `src/equity_research/shortterm/`.
 
 | Data | Source | Status |
 |---|---|---|
-| Daily OHLCV | Stooq (secondary) or `--bars-dir` with `<TICKER>.csv` from any licensed provider | Stooq blocked in the build environment |
-| Universe | SEC `company_tickers_exchange.json`, NYSE + Nasdaq | live; current listings only (survivorship bias) |
+| Daily OHLCV | Yahoo Finance via yfinance (default; secondary, split/dividend-adjusted, no key), Stooq (now a bot check), or `--bars-dir` with `<TICKER>.csv` from any licensed provider | live on GitHub Actions |
+| Universe | SEC `company_tickers_exchange.json`, every NYSE + Nasdaq listing (~7,600) | live; current listings only (survivorship bias) |
 | Catalysts | SEC 8-K: `submissions` (history, acceptance time in UTC, item codes) and the EDGAR live Atom feed | live |
 | Premarket/after-hours, options, short interest, newswires | not available here (blocked or paid) | not used |
 
@@ -69,11 +69,12 @@ the lower bound of the 95% CI of the mean net return is above zero.
 
 ## Daily workflow
 
-`equity-research shortterm scan --stooq` (or `--bars-dir DIR`): data check → panel → walk-forward
+`equity-research shortterm scan` (whole market via Yahoo; or `--bars-dir DIR`): data check → panel → walk-forward
 tests and backtests per horizon → production model (trained up to the last year, validated on
 it) → top 10 → `predictions/<date>.jsonl` → `reports/shortterm/scan_<date>.md`.
 `equity-research shortterm evaluate` compares logged picks with the bars that came after;
-`equity-research shortterm catalysts` lists new 8-Ks. GitHub Actions
+`equity-research shortterm catalysts` lists new 8-Ks. Only tradable rows (price and liquidity
+filters) enter the panel, stored as float32, so the full market fits in a runner's memory. GitHub Actions
 (`.github/workflows/equity-research.yml`) runs the tests on every change and the scan on weekdays
 at 08:45 New York (from the default branch; needs the `EQUITY_RESEARCH_USER_AGENT` secret).
 
