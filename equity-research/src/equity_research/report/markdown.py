@@ -180,7 +180,7 @@ def render(r: ValuationRun, a: RiskAssessment, checks: list[CheckResult], genera
     for m in r.missing:
         findings.append(f"niet bereikbaar of ontbrekend: {m}")
     if a.market_missing:
-        findings.append(f"marktrisico niet berekend (koersdata Stooq niet bereikbaar): {a.market_missing}")
+        findings.append(f"marktrisico niet berekend (koersdata niet bereikbaar): {a.market_missing}")
     L += ["", "**Bevindingen:**", ""] + [f"- {f}" for f in findings] + [""]
 
     # --- 4. fundamentals --------------------------------------------------------------------
@@ -239,7 +239,7 @@ def render(r: ValuationRun, a: RiskAssessment, checks: list[CheckResult], genera
                      "zonder dat het financiële nood aangeeft.")
         L.append("")
     if a.market:
-        L += _table(["Marktrisico (Stooq, secundair)", "Waarde"], [
+        L += _table(["Marktrisico (Yahoo/Stooq, secundair)", "Waarde"], [
             [f"Volatiliteit ({a.market['months']} maandrendementen, op jaarbasis)", pct(a.market["volatility"])],
             ["Grootste daling (5 jaar)", pct(a.market["max_drawdown"])],
             ["Beta t.o.v. S&P 500", nl(a.market["beta"], 2)]])

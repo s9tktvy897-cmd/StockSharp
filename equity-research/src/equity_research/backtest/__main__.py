@@ -1,4 +1,4 @@
-"""``equity-research backtest [--tickers A,B | --max-tickers N] (--stooq | --bars-dir DIR) [--start 2014 --end 2025]``
+"""``equity-research backtest [--tickers A,B | --max-tickers N] [--yahoo | --stooq | --bars-dir DIR] [--start 2014 --end 2025]``
 
 Point-in-time replay of the long-term screens; writes ``reports/backtest/fundamental_<date>.md``."""
 
@@ -80,8 +80,9 @@ def render(observations: list[fb.Observation], rebalances: list[date], horizon: 
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="equity-research backtest")
     p.add_argument("--tickers")
-    p.add_argument("--max-tickers", type=int, default=100)
+    p.add_argument("--max-tickers", type=int, default=0, help="0 = every NYSE/Nasdaq listing")
     p.add_argument("--bars-dir", type=Path)
+    p.add_argument("--yahoo", action="store_true", help="Yahoo Finance prices (default)")
     p.add_argument("--stooq", action="store_true")
     p.add_argument("--start", type=int, default=2014)
     p.add_argument("--end", type=int, default=date.today().year - 1)
@@ -90,7 +91,11 @@ def main(argv: list[str] | None = None) -> None:
     args = p.parse_args(argv)
 
     tickers = [t.strip().upper() for t in args.tickers.split(",")] if args.tickers else None
-    data = load(tickers, args.bars_dir, args.stooq, use_sec=False, max_tickers=args.max_tickers)
+    use_yahoo = args.yahoo or not (args.bars_dir or args.stooq)
+    from equity_research.data.yahoo import YahooPrices
+    years = date.today().year - args.start + 2  # history back to before the first rebalance date
+    data = load(tickers, args.bars_dir, args.stooq, use_sec=False, max_tickers=args.max_tickers, use_yahoo=use_yahoo,
+                yahoo=YahooPrices(CACHE_DIR, years=years))
     edgar = SecEdgar(HttpClient(user_agent_from_env()), DiskCache(CACHE_DIR))
     rebalances = [date(y, args.month, 30 if args.month in (4, 6, 9, 11) else 28) for y in range(args.start, args.end + 1)]
     names = tickers or sorted(data.bars)

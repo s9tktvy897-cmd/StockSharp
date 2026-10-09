@@ -65,3 +65,12 @@ def test_gate_stays_shut_on_noise():
     gate = _gate(planted_universe(signal=False, seed=11))
     assert not gate.passed
     assert gate.reasons
+
+
+def test_panel_keeps_only_tradable_rows_as_float32():
+    from shortterm_fakes import make_bars
+    universe = planted_universe(n_tickers=3, n_days=200)
+    universe["PENNY"] = make_bars("PENNY", [1.0] * 200)
+    panel = build_panel(universe, None, Config())
+    assert "PENNY" not in set(panel.tickers)
+    assert panel.X.dtype == np.float32 and panel.eligible.all()

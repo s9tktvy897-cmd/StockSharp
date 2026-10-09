@@ -30,7 +30,7 @@ Every number either comes from a cited source or is computed from such numbers.
 | Module | Responsibility | Phase |
 |---|---|---|
 | `provenance.py` | `SourcedValue`, `Assumption`: value + source metadata; missing data is explicit | 0 |
-| `data/` | ✅ SEC EDGAR (ticker→CIK, profile/SIC, company facts with point-in-time `annual`/`quarterly`/`history`), ✅ FRED CSV, ✅ disk cache, rate limit, retries. Damodaran (ERP from histimpl.html, industry betas) verified live 2026-10-09; Stooq prices built on synthetic fixtures, not yet verified live | 1, 3 |
+| `data/` | ✅ SEC EDGAR (ticker→CIK, profile/SIC, company facts with point-in-time `annual`/`quarterly`/`history`), ✅ FRED CSV, ✅ disk cache, rate limit, retries. Damodaran (ERP from histimpl.html, industry betas) verified live 2026-10-09; ✅ Yahoo Finance daily bars for every NYSE/Nasdaq listing (`yahoo.py`, cached, re-fetched after re-adjustment); Stooq now answers with a bot check | 1, 3 |
 | `fundamentals/` | ✅ XBRL tags → normalized annual statements (tag fallbacks, split detection/adjustment, point-in-time), ratios, CAGR, ROIC, FCF, consistency checks, TTM and latest balance sheet from 10-Qs | 2, 3 |
 | `valuation/` | ✅ `run.py` (end-to-end valuation, reused by risk/report), WACC (CAPM, Hamada), 2-stage FCFF DCF with fade, terminal value (Gordon + implied exit multiple), reverse DCF, sensitivity grid, bear/base/bull from history, market multiples. Peer multiples: later | 3 |
 | `risk/` | ✅ beta, volatility, max drawdown (`market.py`); ✅ Piotroski F, Altman Z / Z'' (variant by SIC), Beneish M (`scores.py`) | 3, 4 |

@@ -75,7 +75,8 @@ de gebruiker of de sessie-instructies daarom vragen.
 | ESEF-filings (`filings.xbrl.org`) / jaarverslagen IR-site | Cijfers EU-bedrijven | Officiële jaarverslagen |
 | FRED (St. Louis Fed) | Risicovrije rente, inflatie, BBP | Officieel |
 | Damodaran Online (NYU) | Equity risk premium, sector-beta's, marges | Academisch, jaarlijks bijgewerkt |
-| Stooq / yfinance | Koershistorie | Onofficieel: markeren als "secundair", controleren op splitsingen |
+| Yahoo Finance via yfinance | Dagkoersen alle NYSE/Nasdaq-aandelen (standaard) | Onofficieel: "secundair"; split- en dividendgecorrigeerd; cache in `data/cache/yahoo` |
+| Stooq | Koershistorie (reserve) | Sinds 2026-10 een JavaScript-botcontrole i.p.v. CSV: in de praktijk onbruikbaar |
 
 Geen blogs, fora of AI-samenvattingen als bron voor getallen. Bij tegenstrijdige bronnen:
 de officiële filing wint, en het verschil wordt gerapporteerd.
@@ -111,17 +112,17 @@ python -m equity_research.valuation AAPL      # DCF, scenario's, gevoeligheid, r
 python -m equity_research.valuation AAPL --industry "<Damodaran-industrie>"   # bottom-up beta
 python -m equity_research.risk AAPL           # Piotroski, Altman, Beneish, marktrisico, screens
 equity-research analyze AAPL                  # volledig rapport -> reports/AAPL_<datum>.md
-equity-research backtest --tickers AAPL,MSFT --stooq   # screens point-in-time terugspelen (fase 5)
+equity-research backtest --tickers AAPL,MSFT     # screens point-in-time terugspelen (fase 5; zonder --tickers: hele markt)
 ```
 
 - Na elk rapport: `pytest` draaien en §3 "Datakwaliteit" van het rapport nalezen; gefaalde checks
   en ontbrekende bronnen in de samenvatting aan de gebruiker noemen.
 
-- Koers (Stooq), ERP en sectorbeta (Damodaran) mogen bij een geblokkeerde bron alleen met bron
+- Koers (Yahoo/Stooq), ERP en sectorbeta (Damodaran) mogen bij een geblokkeerde bron alleen met bron
   worden ingevoerd: `--price 231.50 --price-source "Nasdaq official close 2026-10-08"` (idem
   `--beta`, `--erp`, `--cost-of-debt`). Nooit een waarde uit het geheugen invullen.
-- De Stooq-parser is gebouwd zonder live toegang: controleer bij het eerste live gebruik de
-  uitkomst tegen de webpagina en pas zo nodig de parser + tests aan. Damodaran is live
+- Yahoo is in de cloudomgeving pas bereikbaar als `query1.finance.yahoo.com`, `query2.finance.yahoo.com`,
+  `fc.yahoo.com` en `guce.yahoo.com` zijn toegestaan; op GitHub Actions werkt het zonder meer. Damodaran is live
   gecontroleerd (2026-10-09); de ERP komt uit `histimpl.html` (`implpr.html` stopt bij 2016).
 
 - SEC-specifiek: gebruik `CompanyFacts.annual(..., as_of=...)` -- per periode de laatst
@@ -163,8 +164,8 @@ De "stock explosion"-module (`src/equity_research/shortterm/`, methode in
 
 ```bash
 equity-research shortterm catalysts --hours 24     # nieuwe 8-K's (SEC, live)
-equity-research shortterm scan --stooq             # of --bars-dir <map met TICKER.csv>
-equity-research shortterm evaluate --stooq         # eerdere voorspellingen controleren
+equity-research shortterm scan                     # hele markt via Yahoo; of --bars-dir <map met TICKER.csv>
+equity-research shortterm evaluate --no-sec        # eerdere voorspellingen controleren
 ```
 
 ## 5. Consistentiechecks (na elke analyse)

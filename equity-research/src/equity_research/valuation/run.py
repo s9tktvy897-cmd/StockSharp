@@ -58,11 +58,27 @@ class Sources:
     fred: Fred
     stooq: Stooq
     damodaran: Damodaran
+    yahoo: "YahooPrices | None" = None
 
     @classmethod
     def live(cls) -> "Sources":
+        from equity_research.data.yahoo import YahooPrices
+
         client, cache = HttpClient(user_agent_from_env()), DiskCache(CACHE_DIR)
-        return cls(SecEdgar(client, cache), Fred(client, cache), Stooq(client, cache), Damodaran(client, cache))
+        return cls(SecEdgar(client, cache), Fred(client, cache), Stooq(client, cache), Damodaran(client, cache),
+                   YahooPrices(CACHE_DIR))
+
+    def closes(self, ticker: str) -> list[SourcedValue]:
+        """Daily closes: Yahoo Finance first, Stooq as fallback (both secondary sources)."""
+        errors = []
+        for name, provider in (("Yahoo", self.yahoo), ("Stooq", self.stooq)):
+            if provider is None:
+                continue
+            try:
+                return provider.daily_closes(ticker)
+            except Exception as error:  # noqa: BLE001 -- any provider failure falls through to the next
+                errors.append(f"{name}: {error}")
+        raise MissingDataError("; ".join(errors) or "no price provider")
 
 
 @dataclass
@@ -168,7 +184,7 @@ def run(args: argparse.Namespace, sources: Sources | None = None) -> ValuationRu
     rf = _attempt(missing, "risk-free rate (FRED DGS10)", lambda: _pct("DGS10", sources.fred, today))
     inflation = _attempt(missing, "inflation expectation (FRED T10YIE)", lambda: _pct("T10YIE", sources.fred, today))
     price = _manual(args.price, args.price_source, "price", "USD/share", today) or _attempt(
-        missing, "share price (Stooq)", lambda: close_on_or_before(sources.stooq.daily_closes(args.ticker), today))
+        missing, "share price (Yahoo/Stooq)", lambda: close_on_or_before(sources.closes(args.ticker), today))
     erp = _manual(args.erp, args.erp_source, "erp", "ratio", today) or _attempt(
         missing, "equity risk premium (Damodaran implied ERP)", sources.damodaran.implied_erp)
     cost_of_debt = _manual(args.cost_of_debt, args.cost_of_debt_source, "cost-of-debt", "ratio", today) \
@@ -191,13 +207,12 @@ def run(args: argparse.Namespace, sources: Sources | None = None) -> ValuationRu
                                      f"D/E {debt / market_cap:.1%}")
     if beta is None:
         def regression():
-            s, m = market.aligned_monthly_returns(sources.stooq.daily_closes(args.ticker),
-                                                  sources.stooq.daily_closes("^SPX"), 60)
+            s, m = market.aligned_monthly_returns(sources.closes(args.ticker), sources.closes("^SPX"), 60)
             if len(s) < 24:
                 raise MissingDataError(f"only {len(s)} monthly returns")
-            return DerivedValue("beta", market.beta(s, m), "beta", "OLS on monthly returns vs S&P 500 (Stooq ^SPX)",
+            return DerivedValue("beta", market.beta(s, m), "beta", "OLS on monthly returns vs the S&P 500 index (secondary price source)",
                                 (), today, note=f"regression on {len(s)} months (secondary price source)")
-        beta = _attempt(missing, "regression beta (Stooq)", regression)
+        beta = _attempt(missing, "regression beta (Yahoo/Stooq)", regression)
 
     wacc_value, wacc_text = None, ""
     if args.wacc is not None:

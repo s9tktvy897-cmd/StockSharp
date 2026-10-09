@@ -14,8 +14,8 @@ on:
   workflow_dispatch:
     inputs:
       max_tickers:
-        description: "Maximum number of tickers to download from Stooq"
-        default: "500"
+        description: "Maximum number of tickers (0 = every NYSE/Nasdaq listing)"
+        default: "0"
 
 permissions:
   contents: read
@@ -39,7 +39,7 @@ jobs:
   daily-scan:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 330
     env:
       EQUITY_RESEARCH_USER_AGENT: ${{ secrets.EQUITY_RESEARCH_USER_AGENT }}
     steps:
@@ -55,9 +55,9 @@ jobs:
           key: equity-research-cache-${{ github.run_id }}
           restore-keys: equity-research-cache-
       - name: Scan
-        run: python -m equity_research.shortterm scan --stooq --max-tickers "${{ github.event.inputs.max_tickers || '500' }}"
+        run: python -m equity_research.shortterm scan --yahoo --max-tickers "${{ github.event.inputs.max_tickers || '0' }}"
       - name: Check earlier predictions
-        run: python -m equity_research.shortterm evaluate --stooq --max-tickers "${{ github.event.inputs.max_tickers || '500' }}" || true
+        run: python -m equity_research.shortterm evaluate --yahoo --no-sec --max-tickers "${{ github.event.inputs.max_tickers || '0' }}" || true
       - uses: actions/upload-artifact@v4
         with:
           name: shortterm-${{ github.run_id }}
