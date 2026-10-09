@@ -54,7 +54,7 @@ def render(r: EngineResult, live_filings: list[Filing], names: dict[str, str], m
         ["Code", code_version],
     ])
     problems = [p for ps in r.data_problems.values() for p in ps]
-    notes = [f"Datafouten: {len(problems)} ({'; '.join(problems[:5])}{' …' if len(problems) > 5 else ''})"] if problems else []
+    notes = [f"Datafouten (koers controleren; deze aandelen zijn geen kandidaat): {len(problems)} ({'; '.join(problems[:5])}{' …' if len(problems) > 5 else ''})"] if problems else []
     notes += [f"Ontbrekende bron: {m}" for m in missing] + [f"Opmerking: {n}" for n in r.notes]
     if timing:
         corrected = sorted(t for t, v in timing.items() if v.startswith("corrected"))
@@ -83,6 +83,9 @@ def render(r: EngineResult, live_filings: list[Filing], names: dict[str, str], m
                          "ja" if g.passed else "nee", "ja" if o.scanner_gate.passed else "nee"])
         L += _table(["Horizon", "Testjaren", "Rijen", "+10%-gevallen", "Basiskans", "Brier-skill", "Kalibratiefout (ECE)",
                      "Top-10 trefkans (95%-BI)", "Kans tonen?", "Scannerregel bruikbaar?"], rows)
+        for h, o in r.oos_drop.items():
+            L.append(f"- {h}d dalingsmodel (≥10% daling): kans tonen {'ja' if o.gate.passed else 'nee'}"
+                     + (f" — {o.gate.reasons[0]}" if o.gate.reasons else ""))
         for h, o in r.oos.items():
             for reason in o.gate.reasons:
                 L.append(f"- {h}d model: {reason}")
@@ -117,6 +120,12 @@ def render(r: EngineResult, live_filings: list[Filing], names: dict[str, str], m
                 verdict = ("historisch winstgevend na kosten (ondergrens 95%-BI > 0)" if lo > 0 else
                            "niet aantoonbaar winstgevend na kosten (95%-BI van het gemiddelde omvat 0 of ligt eronder)")
                 L.append(f"- Model {h}d: {verdict}.")
+                ratio = s["drop_rate"] / s["hit_rate"] if s["hit_rate"] else float("inf")
+                L.append(f"- Richtingstoets {h}d: de top-picks haalden +10% in {pct(s['hit_rate'])} en daalden ≥10% in "
+                         f"{pct(s['drop_rate'])} van de gevallen; "
+                         + ("ze dalen bijna even vaak fors als ze stijgen, dus het model voorspelt vooral beweeglijkheid, "
+                            "geen richting." if ratio >= 0.75 else
+                            "stijgingen komen duidelijk vaker voor dan dalingen."))
         L.append("")
         for h, bt in r.backtests.items():
             if bt.by_year:
@@ -149,6 +158,8 @@ def render(r: EngineResult, live_filings: list[Filing], names: dict[str, str], m
                               f"{nl(s['close_location'], 2)}"],
                 ["Volume", f"RVOL {nl(s['rvol'], 1)}x, 5d/20d {nl(s['volume_trend'], 2)}x"],
                 ["Kans op +10%", probs],
+                ["Kans op ≥10% daling", ", ".join(f"{h}d: {pct(p)}" if p is not None else f"{h}d: niet gevalideerd"
+                                                  for h, p in k.drop_probability.items()) or "niet berekend"],
                 ["Historisch (top-10, buiten trainingsdata)", hist or MISSING],
                 ["Risico's", "; ".join(k.risks)],
                 ["Conclusie", k.conclusion],

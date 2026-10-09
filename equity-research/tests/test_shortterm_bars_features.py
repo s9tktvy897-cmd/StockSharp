@@ -77,3 +77,10 @@ def test_bot_check_page_is_reported_as_such():
     page = "<!DOCTYPE html><html><body><noscript>This site requires JavaScript to verify your browser.</noscript>"
     with pytest.raises(ValueError, match="bot check"):
         parse_ohlcv_csv(page, "AAPL", "Stooq (secondary)")
+
+
+def test_rounding_noise_in_adjusted_bars_is_not_an_error():
+    bars = make_bars("X", [100.0, 100.0], highs=[100.0, 99.99], lows=[100.0, 100.0])  # 0.01% below the close
+    assert not any("high below" in p for p in validate(bars))
+    bad = make_bars("X", [100.0, 100.0], highs=[100.0, 98.0])
+    assert any("high below" in p for p in validate(bad))

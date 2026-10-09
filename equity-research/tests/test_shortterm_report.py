@@ -50,3 +50,16 @@ def test_prediction_log_round_trip_and_evaluation(tmp_path):
                                   {"Z": bars}, Config())
     assert result[1]["evaluated"] == 1 and result[1]["hits"] == 1
     assert result[1]["brier"] == (0.3 - 1) ** 2
+
+
+def test_universe_excludes_warrants_and_units():
+    from equity_research.shortterm.sources import is_common_stock
+    assert is_common_stock("AAPL") and is_common_stock("BRK-B")
+    assert not any(is_common_stock(t) for t in ("AAC-WT", "AAC-UN", "XYZ-WS", "ABC-RT", "ABC-U"))
+
+
+def test_drop_model_and_direction_check_are_reported():
+    r, text = _render(True, 7)
+    assert "Kans op ≥10% daling" in text
+    assert "Richtingstoets" in text
+    assert r.oos_drop and set(r.oos_drop) == {1, 2}

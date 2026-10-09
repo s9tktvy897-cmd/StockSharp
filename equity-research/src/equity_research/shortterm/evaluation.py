@@ -155,8 +155,9 @@ def _fit_select(X, y, train, val):
     return best
 
 
-def out_of_sample(panel: Panel, horizon: int, config: Config) -> OutOfSample:
-    y_all = panel.outcomes[horizon]["hit"] if panel.outcomes.get(horizon) else np.array([])
+def out_of_sample(panel: Panel, horizon: int, config: Config, target: str = "hit") -> OutOfSample:
+    """``target`` "hit" (+10% reached) or "drop" (fell 10% or more), judged the same way."""
+    y_all = panel.outcomes[horizon][target] if panel.outcomes.get(horizon) else np.array([])
     usable = panel.eligible & np.isfinite(y_all) if len(y_all) else np.array([], dtype=bool)
     scores = np.full(len(panel.dates), np.nan)
     scanner = np.full(len(panel.dates), np.nan)

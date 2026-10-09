@@ -24,6 +24,15 @@ EXCHANGE_TICKERS_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 LISTED = ("Nasdaq", "NYSE")
 
 
+NON_COMMON_SUFFIXES = {"WT", "WS", "W", "UN", "U", "RT", "R"}
+
+
+def is_common_stock(ticker: str) -> bool:
+    """Leaves out warrants, units and rights (``AAC-WT``, ``AAC-UN``); share classes (``BRK-B``) stay."""
+    _, _, suffix = ticker.upper().partition("-")
+    return suffix not in NON_COMMON_SUFFIXES
+
+
 @dataclass
 class Listing:
     ticker: str
@@ -56,7 +65,7 @@ class ShortTermSources:
         out = {}
         for row in data["data"]:
             r = dict(zip(cols, row))
-            if r["exchange"] in LISTED:
+            if r["exchange"] in LISTED and is_common_stock(r["ticker"]):
                 out[r["ticker"].upper()] = Listing(r["ticker"].upper(), format_cik(r["cik"]), r["name"], r["exchange"])
         return out
 
