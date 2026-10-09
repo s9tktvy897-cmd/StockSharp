@@ -4,6 +4,39 @@ Formulas and thresholds used by the system. Each one gets a unit test with a wor
 before it is used in an analysis. Sources are standard references (Damodaran, *Investment
 Valuation*; McKinsey, *Valuation*; the original papers for the scores).
 
+## Fundamentals (phase 2, `fundamentals/`)
+
+Statements come from SEC company facts, one normalized line item per list of synonym XBRL
+tags (`fundamentals/concepts.py`, priority order). A tag switch over the years and any
+disagreement > 0.5% between tags for the same period are reported as data-quality issues.
+
+- **Stock splits** are inferred from the filings: a later filing restating the share count of
+  the same period by a common split ratio (whole number, 3/2, 5/4, 5/2, 4/3; within 2%) marks a
+  split between the two filing dates. Share counts and per-share values filed before it are
+  adjusted. Only filings public on the as-of date are used (no look-ahead).
+- **Optional components** (marketable securities, debt parts): a component a company never
+  reports counts as 0, with a note; a gap in a component it does report is missing data.
+- FCF = operating cash flow − capex (payments for PP&E).
+- Margins: gross/operating/net profit, FCF ÷ revenue. FCF conversion = FCF ÷ net income.
+- Effective tax rate = income tax ÷ pretax income (undefined for pretax ≤ 0).
+  NOPAT = operating income × (1 − effective tax rate).
+- Total debt = long-term debt (non-current + current) + commercial paper + short-term
+  borrowings. Operating leases are excluded.
+- Net debt = total debt − cash − current marketable securities. Non-current marketable
+  securities are left out here and treated as non-operating assets in the valuation.
+- Invested capital = equity + total debt − cash − all marketable securities (McKinsey's
+  financing view). ROIC = NOPAT ÷ average invested capital; undefined when the average is ≤ 0.
+  Companies with large securities portfolios and negative working capital (e.g. Apple) have
+  negative or tiny invested capital, so ROIC is also reported as return on capital including
+  cash = NOPAT ÷ average (equity + total debt).
+- ROE = net income ÷ average equity. Buybacks can shrink equity and inflate ROE.
+- Accruals ratio (Sloan, 1996) = (net income − operating cash flow) ÷ average total assets.
+- Net debt / EBITDA, EBITDA = operating income + D&A (cash-flow statement).
+- Interest coverage = operating income ÷ interest expense.
+- Shareholder payout = (dividends paid + buybacks) ÷ FCF. Dilution = y/y change in
+  split-adjusted diluted weighted shares.
+- CAGR = (end ÷ start)^(1/n) − 1, defined only for positive start and end.
+
 ## DCF (FCFF, two-stage)
 
 - FCFF = EBIT × (1 − t) + D&A − capex − ΔNWC

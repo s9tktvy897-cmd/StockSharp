@@ -48,5 +48,24 @@ class Assumption:
             raise ValueError(f"assumption {self.name!r} needs a rationale")
 
 
+@dataclass(frozen=True)
+class DerivedValue:
+    """A number computed from facts. ``inputs`` are the facts (or derived values) it was computed
+    from; when it cannot be computed, ``value`` is None and ``missing_reason`` says why."""
+
+    name: str
+    value: float | None
+    unit: str
+    formula: str
+    inputs: tuple = ()
+    period_end: date | None = None
+    missing_reason: str | None = None
+    note: str | None = None
+
+    @property
+    def is_missing(self) -> bool:
+        return self.value is None
+
+
 class MissingDataError(LookupError):
     pass

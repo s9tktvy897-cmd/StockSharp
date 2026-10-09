@@ -116,6 +116,15 @@ class CompanyFacts:
             filing_fiscal_period=row.get("fp"),
         )
 
+    def history(self, concept: str, unit: str = "USD", taxonomy: str = "us-gaap", as_of: date | None = None) -> list[EdgarFact]:
+        """Every 10-K/10-Q value of a concept, one per filing and period (no deduplication), so
+        restatements between filings stay visible. Sorted by filing date."""
+        rows = [r for r in self._rows(concept, unit, taxonomy)
+                if r.get("form") in ANNUAL_FORMS | QUARTERLY_FORMS
+                and (as_of is None or date.fromisoformat(r["filed"]) <= as_of)]
+        facts = [self._fact(concept, unit, taxonomy, row) for row in rows]
+        return sorted(facts, key=lambda f: (f.filed, f.accession, f.period_end))
+
     def annual(self, concept: str, unit: str = "USD", taxonomy: str = "us-gaap", as_of: date | None = None) -> list[EdgarFact]:
         """Fiscal-year values (or year-end instants) from 10-K filings: per period the latest
         filing that was public on ``as_of``."""
