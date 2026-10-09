@@ -114,6 +114,32 @@ equity-research analyze AAPL                  # volledig rapport -> reports/AAPL
 - `data/` (cache) staat in `.gitignore`; rapporten in `reports/` worden wel gecommit.
 - Nieuwe databron = nieuwe adapter in `src/equity_research/data/` die `SourcedValue`s teruggeeft.
 
+## 5a. Kortetermijnmodule (aanvulling, geen vervanging)
+
+De "stock explosion"-module (`src/equity_research/shortterm/`, methode in
+`docs/SHORT_TERM_ENGINE.md`) zoekt dagelijks naar aandelen met een statistisch onderbouwde kans op
++10% binnen 1–2 handelsdagen. Alles hierboven blijft gelden; aanvullend:
+
+- **Kansen alleen na de out-of-sample-poort** (`evaluation.probability_gate`): ≥ 30 gevallen,
+  Brier-skill > 0, goede kalibratie en een top-10-trefkans significant boven de basiskans. Anders
+  rangschikken zonder kans, en zonder geldige rangschikking: **geen kandidaten**. Noem dat expliciet.
+- **Nooit** winst garanderen, nooit "koop" zeggen, nooit orders plaatsen of aan een broker koppelen
+  zonder aparte toestemming van de gebruiker.
+- Point-in-time: kenmerken t/m het slot van dag t, 8-K's op acceptatietijd (UTC → New York),
+  instap op de opening van t+1. Nieuwe kenmerken krijgen een test dat ze niet in de toekomst kijken.
+- "Historisch winstgevend" alleen als de ondergrens van het 95%-BI van het gemiddelde netto
+  rendement (na kosten) boven 0 ligt.
+- Modelverbetering via hetzelfde walk-forward-protocol; het laatste testjaar niet gebruiken om te
+  tunen. Vergelijk daarna met de voorspellingslog (`predictions/`, `shortterm evaluate`).
+- Nieuws: alleen officiële bronnen (SEC 8-K) of door de gebruiker gelicentieerde bronnen; het
+  itemnummer zegt het soort gebeurtenis, niet de richting. Verzin nooit nieuws.
+
+```bash
+equity-research shortterm catalysts --hours 24     # nieuwe 8-K's (SEC, live)
+equity-research shortterm scan --stooq             # of --bars-dir <map met TICKER.csv>
+equity-research shortterm evaluate --stooq         # eerdere voorspellingen controleren
+```
+
 ## 5. Consistentiechecks (na elke analyse)
 
 - Balans sluit: activa = passiva + eigen vermogen (tolerantie 0,5%).

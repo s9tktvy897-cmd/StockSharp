@@ -7,7 +7,7 @@ name = "equity-research"
 version = "0.1.0"
 description = "Source-traceable fundamental equity analysis: DCF, screens, risk scores, backtests"
 requires-python = ">=3.11"
-dependencies = ["numpy", "pandas"]
+dependencies = ["numpy", "pandas", "scikit-learn"]
 
 [project.scripts]
 equity-research = "equity_research.cli:main"

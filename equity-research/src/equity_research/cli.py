@@ -1,6 +1,7 @@
 """``equity-research <command> <TICKER> [options]``: one entry point for the module CLIs.
 
-Commands: data, fundamentals, valuation, risk, analyze (writes the report)."""
+Commands: data, fundamentals, valuation, risk, analyze (writes the report), shortterm (scan, catalysts,
+evaluate)."""
 
 from __future__ import annotations
 
@@ -13,13 +14,15 @@ COMMANDS = {
     "valuation": "equity_research.valuation.__main__",
     "risk": "equity_research.risk.__main__",
     "analyze": "equity_research.report.__main__",
+    "shortterm": "equity_research.shortterm.__main__",
 }
 
 
 def main(argv: list[str] | None = None) -> None:
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0] not in COMMANDS:
-        raise SystemExit(f"usage: equity-research {{{','.join(COMMANDS)}}} TICKER [options]")
+        raise SystemExit(f"usage: equity-research {{{','.join(COMMANDS)}}} TICKER [options] | "
+                         "equity-research shortterm {scan,catalysts,evaluate} [options]")
     import_module(COMMANDS[argv[0]]).main(argv[1:])
 
 
