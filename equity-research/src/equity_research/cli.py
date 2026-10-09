@@ -1,7 +1,7 @@
 """``equity-research <command> <TICKER> [options]``: one entry point for the module CLIs.
 
 Commands: data, fundamentals, valuation, risk, analyze (writes the report), shortterm (scan, catalysts,
-evaluate)."""
+evaluate), backtest (point-in-time replay of the long-term screens)."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ COMMANDS = {
     "risk": "equity_research.risk.__main__",
     "analyze": "equity_research.report.__main__",
     "shortterm": "equity_research.shortterm.__main__",
+    "backtest": "equity_research.backtest.__main__",
 }
 
 

@@ -35,10 +35,10 @@ Every number either comes from a cited source or is computed from such numbers.
 | `valuation/` | ✅ `run.py` (end-to-end valuation, reused by risk/report), WACC (CAPM, Hamada), 2-stage FCFF DCF with fade, terminal value (Gordon + implied exit multiple), reverse DCF, sensitivity grid, bear/base/bull from history, market multiples. Peer multiples: later | 3 |
 | `risk/` | ✅ beta, volatility, max drawdown (`market.py`); ✅ Piotroski F, Altman Z / Z'' (variant by SIC), Beneish M (`scores.py`) | 3, 4 |
 | `screening/` | ✅ Value and growth screens (three-valued), thresholds from `METHODOLOGY.md`. Multi-ticker universe screen: phase 5 | 4 |
-| `backtest/` | Point-in-time screen replay, forward returns vs benchmark, hit rate, IC, drawdown; bias checklist | 5 |
+| `backtest/` | ✅ Point-in-time replay of the long-term screens (`fundamental.py`): statements as filed on each rebalance date, 12-month forward returns from the next open, excess over the same-date universe, beat rate with CI, t-stat, Spearman IC; bias notes in the report | 5 |
 | `report/` | ✅ Markdown report in Dutch (`markdown.py`, sections follow CLAUDE.md §2: scope, data, data quality, fundamentals, scores, valuation with facts and assumptions apart, classification, risks, sources); Dutch number format (`format.py`) | 6 |
 | `shortterm/` | ✅ Short-term engine (+10% in 1–2 days): bars + validation, point-in-time features, SEC 8-K catalysts, walk-forward models with a probability gate, backtest with costs, daily top 10, prediction log, report. See `SHORT_TERM_ENGINE.md` | 7 |
-| `cli.py` | ✅ `equity-research {data,fundamentals,valuation,risk,analyze} TICKER`, `equity-research shortterm {scan,catalysts,evaluate}`; `screen` (universe) and `backtest`: phase 5 | 6 |
+| `cli.py` | ✅ `equity-research {data,fundamentals,valuation,risk,analyze} TICKER`, `equity-research shortterm {scan,catalysts,evaluate}`, `equity-research backtest`; `screen` (universe) and `backtest`: phase 5 | 6 |
 
 ## Design rules
 

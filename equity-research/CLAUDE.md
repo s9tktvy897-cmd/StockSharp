@@ -111,6 +111,7 @@ python -m equity_research.valuation AAPL      # DCF, scenario's, gevoeligheid, r
 python -m equity_research.valuation AAPL --industry "<Damodaran-industrie>"   # bottom-up beta
 python -m equity_research.risk AAPL           # Piotroski, Altman, Beneish, marktrisico, screens
 equity-research analyze AAPL                  # volledig rapport -> reports/AAPL_<datum>.md
+equity-research backtest --tickers AAPL,MSFT --stooq   # screens point-in-time terugspelen (fase 5)
 ```
 
 - Na elk rapport: `pytest` draaien en §3 "Datakwaliteit" van het rapport nalezen; gefaalde checks
