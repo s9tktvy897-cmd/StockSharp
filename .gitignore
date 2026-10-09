@@ -197,7 +197,9 @@ Documentation.shfbproj_Ivan
 
 .vs/
 
-.claude
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 /reviewResults
 nul
 
