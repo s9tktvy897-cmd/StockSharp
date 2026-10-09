@@ -72,3 +72,26 @@ def test_implied_erp_latest_year_fcfe():
 def test_unexpected_layout_fails_loudly():
     with pytest.raises(ValueError):
         damodaran.implied_erp("<table><tr><td>a</td></tr></table>", retrieved=date(2026, 10, 9), url="u")
+
+
+# SYNTHETIC, shaped like histimpl.html (checked live 2026-10-09): page date line, then the table.
+HISTIMPL_HTML = """<p>Date : January 2026</p><table>
+<tr><td>Year</td><td>T.Bond Rate</td><td>Smoothed Growth</td><td>Implied ERP (FCFE)</td></tr>
+<tr><td>2024</td><td>4.58%</td><td>4.61%</td><td>4.40%</td></tr>
+<tr><td>2025</td><td>4.18%</td><td>4.61%</td><td>4.10%</td></tr></table>"""
+
+
+def test_implied_erp_reads_histimpl_layout_and_page_date():
+    erp = damodaran.implied_erp(HISTIMPL_HTML, retrieved=date(2026, 10, 9), url="u")
+    assert erp.value == pytest.approx(0.041)
+    assert "January 2026" in erp.reference
+
+
+def test_stale_erp_table_is_refused():
+    with pytest.raises(MissingDataError) as error:
+        damodaran.implied_erp(ERP_HTML, retrieved=date(2029, 1, 5), url="u")
+    assert "2025" in str(error.value)
+
+
+def test_erp_url_is_the_maintained_page():
+    assert damodaran.IMPLIED_ERP_URL.endswith("histimpl.html")

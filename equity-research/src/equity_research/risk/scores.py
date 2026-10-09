@@ -80,10 +80,14 @@ def _avg(a: float | None, b: float | None) -> float | None:
     return (a + b) / 2 if a is not None and b is not None else None
 
 
+def _show(x: float) -> str:
+    return f"{x / 1e9:.3f} bn" if abs(x) >= 1e6 else f"{x:.4g}"
+
+
 def _signal(name: str, now: float | None, before: float | None, test, label: str) -> Signal:
     if now is None or before is None:
         return Signal(name, None, f"{label}: input missing")
-    return Signal(name, bool(test(now, before)), f"{label}: {now:.4g} vs {before:.4g}")
+    return Signal(name, bool(test(now, before)), f"{label}: {_show(now)} vs {_show(before)}")
 
 
 def piotroski(st: AnnualStatements, year: date) -> PiotroskiResult:

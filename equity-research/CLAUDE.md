@@ -9,6 +9,14 @@ Chat met de gebruiker in het **Nederlands**.
 8-K), USD. Andere markten alleen op verzoek, en dan met expliciete vermelding van de
 beperkingen van de bron.
 
+## 0. Begin van elke sessie
+
+De SessionStart-hook installeert het pakket en meldt per bron of die bereikbaar is
+(`BLOCKED` = netwerkbeleid). Neem die melding over in je eerste antwoord als een bron die je nodig
+hebt geblokkeerd is, en vul ontbrekende data nooit zelf in. Draai `python -m pytest -q` vóór een
+analyse. Werk op de toegewezen branch, commit met een duidelijke boodschap en push alleen als
+de gebruiker of de sessie-instructies daarom vragen.
+
 ## 1. Harde regels (nooit overtreden)
 
 1. **Verzin nooit financiële gegevens.** Elk getal in een analyse komt uit een bron
@@ -54,7 +62,10 @@ beperkingen van de bron.
 7. **Classificatie** -- ondergewaardeerd (koers < intrinsieke waarde met veiligheidsmarge
    ≥ 25% in het base-scenario én kwaliteitsscore niet zwak) en/of groeiaandeel (criteria in
    `docs/METHODOLOGY.md`). Het oordeel volgt uit de cijfers, niet andersom.
-8. **Rapport** -- template in `src/equity_research/report/`; opslaan in `reports/<TICKER>_<YYYY-MM-DD>.md`.
+8. **Rapport** -- template in `src/equity_research/report/`; opslaan in `reports/<TICKER>_<YYYY-MM-DD>.md`
+   met `equity-research analyze <TICKER> --context reports/context/<TICKER>_<datum>.md` na het
+   webonderzoek (zie §3). Daarna samenvatten in de chat: kerncijfers, oordeel, ontbrekende
+   bronnen, gefaalde checks, link naar het rapport.
 
 ## 3. Bronnen (betrouwbaarheid aflopend)
 
@@ -68,6 +79,21 @@ beperkingen van de bron.
 
 Geen blogs, fora of AI-samenvattingen als bron voor getallen. Bij tegenstrijdige bronnen:
 de officiële filing wint, en het verschil wordt gerapporteerd.
+
+**Breed webonderzoek voor context (bij elke analyse).** Zoek met WebSearch/WebFetch op zoveel
+mogelijk betrouwbare sites (IR-site van het bedrijf, SEC-filings, persberichten, Reuters, AP,
+Bloomberg, CNBC, WSJ, FT, vakmedia, toezichthouders zoals FDA/FTC/EU) naar: recent nieuws,
+guidance en cijferdata, productnieuws, juridische en regelgevende zaken, managementwissels,
+overnames, en het oordeel van analisten. Regels:
+- Elk punt met **bron-URL en datum** in een contextbestand `reports/context/<TICKER>_<datum>.md`
+  (één regel per punt, `- YYYY-MM-DD: ... (https://...)`, de datum van de gebeurtenis of publicatie;
+  onbekend → de ophaaldatum met "(opgehaald; publicatiedatum onbekend)"); het rapport neemt dat op met
+  `--context` en weigert regels zonder URL of datum.
+- **Controleer** zwaarwegende claims (CEO-wissel, overname, guidance, cijferdatum) tegen een
+  officiële bron (8-K/filingpagina, IR-site) en vermeld of dat gelukt is.
+- Getallen van websites (koersdoelen, consensus) zijn **secundair**: alleen als context, nooit
+  als invoer voor berekeningen. Zoekresultaten zonder datum of van onbekende sites niet gebruiken.
+- Meld tegenstrijdige berichten en wat niet te verifiëren was.
 
 ## 4. Werken in deze map
 
@@ -84,13 +110,19 @@ python -m equity_research.fundamentals AAPL --as-of 2020-01-01   # point-in-time
 python -m equity_research.valuation AAPL      # DCF, scenario's, gevoeligheid, reverse DCF
 python -m equity_research.valuation AAPL --industry "<Damodaran-industrie>"   # bottom-up beta
 python -m equity_research.risk AAPL           # Piotroski, Altman, Beneish, marktrisico, screens
+equity-research analyze AAPL                  # volledig rapport -> reports/AAPL_<datum>.md
+equity-research backtest --tickers AAPL,MSFT --stooq   # screens point-in-time terugspelen (fase 5)
 ```
+
+- Na elk rapport: `pytest` draaien en §3 "Datakwaliteit" van het rapport nalezen; gefaalde checks
+  en ontbrekende bronnen in de samenvatting aan de gebruiker noemen.
 
 - Koers (Stooq), ERP en sectorbeta (Damodaran) mogen bij een geblokkeerde bron alleen met bron
   worden ingevoerd: `--price 231.50 --price-source "Nasdaq official close 2026-10-08"` (idem
   `--beta`, `--erp`, `--cost-of-debt`). Nooit een waarde uit het geheugen invullen.
-- De Stooq- en Damodaran-parsers zijn gebouwd zonder live toegang: controleer bij het eerste
-  live gebruik de uitkomst tegen de webpagina en pas zo nodig de parser + tests aan.
+- De Stooq-parser is gebouwd zonder live toegang: controleer bij het eerste live gebruik de
+  uitkomst tegen de webpagina en pas zo nodig de parser + tests aan. Damodaran is live
+  gecontroleerd (2026-10-09); de ERP komt uit `histimpl.html` (`implpr.html` stopt bij 2016).
 
 - SEC-specifiek: gebruik `CompanyFacts.annual(..., as_of=...)` -- per periode de laatst
   ingediende waarde die op `as_of` publiek was (herziene cijfers tellen pas vanaf hun
@@ -108,6 +140,32 @@ python -m equity_research.risk AAPL           # Piotroski, Altman, Beneish, mark
 - Architectuur: `docs/ARCHITECTURE.md`. Formules en drempels: `docs/METHODOLOGY.md`.
 - `data/` (cache) staat in `.gitignore`; rapporten in `reports/` worden wel gecommit.
 - Nieuwe databron = nieuwe adapter in `src/equity_research/data/` die `SourcedValue`s teruggeeft.
+
+## 5a. Kortetermijnmodule (aanvulling, geen vervanging)
+
+De "stock explosion"-module (`src/equity_research/shortterm/`, methode in
+`docs/SHORT_TERM_ENGINE.md`) zoekt dagelijks naar aandelen met een statistisch onderbouwde kans op
++10% binnen 1–2 handelsdagen. Alles hierboven blijft gelden; aanvullend:
+
+- **Kansen alleen na de out-of-sample-poort** (`evaluation.probability_gate`): ≥ 30 gevallen,
+  Brier-skill > 0, goede kalibratie en een top-10-trefkans significant boven de basiskans. Anders
+  rangschikken zonder kans, en zonder geldige rangschikking: **geen kandidaten**. Noem dat expliciet.
+- **Nooit** winst garanderen, nooit "koop" zeggen, nooit orders plaatsen of aan een broker koppelen
+  zonder aparte toestemming van de gebruiker.
+- Point-in-time: kenmerken t/m het slot van dag t, 8-K's op acceptatietijd (UTC → New York),
+  instap op de opening van t+1. Nieuwe kenmerken krijgen een test dat ze niet in de toekomst kijken.
+- "Historisch winstgevend" alleen als de ondergrens van het 95%-BI van het gemiddelde netto
+  rendement (na kosten) boven 0 ligt.
+- Modelverbetering via hetzelfde walk-forward-protocol; het laatste testjaar niet gebruiken om te
+  tunen. Vergelijk daarna met de voorspellingslog (`predictions/`, `shortterm evaluate`).
+- Nieuws: alleen officiële bronnen (SEC 8-K) of door de gebruiker gelicentieerde bronnen; het
+  itemnummer zegt het soort gebeurtenis, niet de richting. Verzin nooit nieuws.
+
+```bash
+equity-research shortterm catalysts --hours 24     # nieuwe 8-K's (SEC, live)
+equity-research shortterm scan --stooq             # of --bars-dir <map met TICKER.csv>
+equity-research shortterm evaluate --stooq         # eerdere voorspellingen controleren
+```
 
 ## 5. Consistentiechecks (na elke analyse)
 

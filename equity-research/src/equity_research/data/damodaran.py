@@ -1,9 +1,9 @@
 """Damodaran Online (NYU Stern) data pages: industry betas and the implied equity risk premium.
 
 The pages are HTML tables with a header row; columns are found by name, so a changed layout
-fails loudly instead of returning a wrong number. NOTE: the parsers were written against the
-documented layout without live access (host blocked in the build environment); verify on
-first live use."""
+fails loudly instead of returning a wrong number. Layouts verified live on 2026-10-09 (Betas.html
+and histimpl.html, both "January 2026"). Each page states its data date, which goes into the
+reference."""
 
 from __future__ import annotations
 
@@ -17,7 +17,9 @@ from equity_research.provenance import MissingDataError, SourcedValue
 
 BASE = "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/"
 BETAS_URL = BASE + "Betas.html"
-IMPLIED_ERP_URL = BASE + "implpr.html"
+# histimpl.html is maintained yearly; implpr.html stopped at 2016 (both checked live 2026-10-09).
+IMPLIED_ERP_URL = BASE + "histimpl.html"
+MAX_ERP_AGE_YEARS = 2
 MAX_AGE = timedelta(days=7)
 SOURCE = "Damodaran Online (NYU Stern)"
 
@@ -73,6 +75,18 @@ def _column(header: list[str], *names: str) -> int:
     raise ValueError(f"none of the columns {names} found in {header}")
 
 
+def page_date(html: str) -> str | None:
+    """The data date a Damodaran page states, e.g. 'January 2026'."""
+    text = " ".join(re.sub(r"<[^>]+>", " ", html).split())
+    match = re.search(r"(?:Date(?: of Analysis)?\s*:\s*(?:Data used is as of\s+)?)([A-Z][a-z]+ \d{4})", text)
+    return match.group(1) if match else None
+
+
+def _dated(url: str, html: str) -> str:
+    when = page_date(html)
+    return f"{url} (data as of {when})" if when else f"{url} (page states no date)"
+
+
 def _number(text: str) -> float:
     cleaned = text.replace(",", "").replace("$", "").strip()
     return float(cleaned[:-1]) / 100 if cleaned.endswith("%") else float(cleaned)
@@ -86,7 +100,7 @@ def industry_beta(html: str, industry: str, retrieved: date, url: str) -> Source
     for row in rows:
         if len(row) > beta_col and row[name_col].lower() == industry.strip().lower():
             return SourcedValue(value=_number(row[beta_col]), unit="beta", source=SOURCE,
-                                reference=f"{url} industry {row[name_col]!r}, column {header[beta_col]!r}",
+                                reference=f"{_dated(url, html)} industry {row[name_col]!r}, column {header[beta_col]!r}",
                                 retrieved=retrieved)
     raise MissingDataError(f"industry {industry!r} not in Damodaran betas; choose one of: {', '.join(names)}")
 
@@ -100,8 +114,10 @@ def implied_erp(html: str, retrieved: date, url: str) -> SourcedValue:
     if not dated:
         raise ValueError("implied ERP table has no data rows")
     year, row = max(dated, key=lambda item: item[0])
+    if retrieved.year - year > MAX_ERP_AGE_YEARS:
+        raise MissingDataError(f"implied ERP table ends in {year}; too old for a valuation in {retrieved.year}")
     return SourcedValue(value=_number(row[erp_col]), unit="ratio", source=SOURCE,
-                        reference=f"{url} year {year}, column {header[erp_col]!r} (start of {year + 1})",
+                        reference=f"{_dated(url, html)} year {year}, column {header[erp_col]!r} (start of {year + 1})",
                         retrieved=retrieved, period_end=date(year, 12, 31))
 
 

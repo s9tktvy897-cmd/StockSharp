@@ -1,0 +1,67 @@
+# equity-research (Python, equity-research/): tests on every change, and a daily short-term scan.
+# The scan only runs on a schedule from the default branch; it needs the repository secret
+# EQUITY_RESEARCH_USER_AGENT ("equity-research name@example.com", required by the SEC).
+# Reports and the prediction log are uploaded as an artifact; nothing is committed or traded.
+name: equity-research
+
+on:
+  push:
+    paths: ["equity-research/**", ".github/workflows/equity-research.yml"]
+  pull_request:
+    paths: ["equity-research/**", ".github/workflows/equity-research.yml"]
+  schedule:
+    - cron: "45 12 * * 1-5"  # 08:45 New York (EDT) / 07:45 (EST), before the US open
+  workflow_dispatch:
+    inputs:
+      max_tickers:
+        description: "Maximum number of tickers to download from Stooq"
+        default: "500"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: equity-research
+
+jobs:
+  tests:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest -q
+
+  daily-scan:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      EQUITY_RESEARCH_USER_AGENT: ${{ secrets.EQUITY_RESEARCH_USER_AGENT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest -q
+      - uses: actions/cache@v4
+        with:
+          path: equity-research/data/cache
+          key: equity-research-cache-${{ github.run_id }}
+          restore-keys: equity-research-cache-
+      - name: Scan
+        run: python -m equity_research.shortterm scan --stooq --max-tickers "${{ github.event.inputs.max_tickers || '500' }}"
+      - name: Check earlier predictions
+        run: python -m equity_research.shortterm evaluate --stooq --max-tickers "${{ github.event.inputs.max_tickers || '500' }}" || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shortterm-${{ github.run_id }}
+          path: |
+            equity-research/reports/shortterm/
+            equity-research/predictions/
+          if-no-files-found: warn

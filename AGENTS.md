@@ -48,7 +48,8 @@ filter and a timeout, e.g. `dotnet test StockSharp_Tests.slnx --filter <Name>`.
   `Alerts.Interfaces/`.
 - `Localization*/`, `Media*/` -- resources and their source generators.
 - `Samples/` -- API usage examples (own solution). `Tests/` -- the test suite.
-- `.github/workflows/dotnet.yml` -- the only CI workflow. `scripts/` -- the validators its
+- `.github/workflows/dotnet.yml` -- the CI workflow of the C# code; `.github/workflows/equity-research.yml`
+  tests the separate Python project in `equity-research/` and runs its daily scan. `scripts/` -- the validators its
   `validate` job runs before anything is built (see "CI validators" below).
 
 ## Conventions (repo-specific)

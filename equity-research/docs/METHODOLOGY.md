@@ -114,3 +114,17 @@ Solve for the stage-1 growth rate that makes DCF value = current market price (b
 
 Thresholds are hypotheses. Phase 5 tests them point-in-time; results and their biases are
 documented here once available.
+
+## Backtest of the screens (phase 5, `backtest/fundamental.py`)
+
+On each rebalance date (default 30 April, after most 10-Ks) the statements are rebuilt from the
+filings public on that date; companies whose latest fiscal year ended more than 15 months earlier
+are skipped. Signals: Piotroski (only when all 9 signals are testable), Beneish flag, Altman zone
+(variant by SIC; Z uses the market value at fiscal year end from bars), revenue CAGR 5y, FCF
+positive and rising. Outcome: return from the first open after the date to the last close within
+365 days; none when the history stops (delisting). Each return is taken in excess of the
+equal-weighted universe mean on the same date. Reported per screen: n, mean and median excess,
+share beating the universe (Wilson CI), t-statistic, and the rest of the universe; Spearman rank
+correlation of the Piotroski score with returns per date. A screen is only called promising with
+n ≥ 30 and |t| > 2, and then still as an indication (several screens are tested at once).
+Known biases: survivorship (current listings), large-cap tilt of the SEC list, no costs.
