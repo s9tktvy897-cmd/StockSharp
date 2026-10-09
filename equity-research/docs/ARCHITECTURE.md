@@ -36,8 +36,8 @@ Every number either comes from a cited source or is computed from such numbers.
 | `risk/` | ✅ beta, volatility, max drawdown (`market.py`); ✅ Piotroski F, Altman Z / Z'' (variant by SIC), Beneish M (`scores.py`) | 3, 4 |
 | `screening/` | ✅ Value and growth screens (three-valued), thresholds from `METHODOLOGY.md`. Multi-ticker universe screen: phase 5 | 4 |
 | `backtest/` | Point-in-time screen replay, forward returns vs benchmark, hit rate, IC, drawdown; bias checklist | 5 |
-| `report/` | Markdown report: facts, assumptions, valuation, risks, data-quality section | 6 |
-| `cli.py` | `equity-research analyze AAPL`, `screen`, `backtest` | 6 |
+| `report/` | ✅ Markdown report in Dutch (`markdown.py`, sections follow CLAUDE.md §2: scope, data, data quality, fundamentals, scores, valuation with facts and assumptions apart, classification, risks, sources); Dutch number format (`format.py`) | 6 |
+| `cli.py` | ✅ `equity-research {data,fundamentals,valuation,risk,analyze} TICKER`; `screen` (universe) and `backtest`: phase 5 | 6 |
 
 ## Design rules
 

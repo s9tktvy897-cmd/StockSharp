@@ -84,7 +84,11 @@ python -m equity_research.fundamentals AAPL --as-of 2020-01-01   # point-in-time
 python -m equity_research.valuation AAPL      # DCF, scenario's, gevoeligheid, reverse DCF
 python -m equity_research.valuation AAPL --industry "<Damodaran-industrie>"   # bottom-up beta
 python -m equity_research.risk AAPL           # Piotroski, Altman, Beneish, marktrisico, screens
+equity-research analyze AAPL                  # volledig rapport -> reports/AAPL_<datum>.md
 ```
+
+- Na elk rapport: `pytest` draaien en §3 "Datakwaliteit" van het rapport nalezen; gefaalde checks
+  en ontbrekende bronnen in de samenvatting aan de gebruiker noemen.
 
 - Koers (Stooq), ERP en sectorbeta (Damodaran) mogen bij een geblokkeerde bron alleen met bron
   worden ingevoerd: `--price 231.50 --price-source "Nasdaq official close 2026-10-08"` (idem
