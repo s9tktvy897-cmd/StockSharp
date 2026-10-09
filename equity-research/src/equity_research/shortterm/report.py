@@ -57,12 +57,12 @@ def render(r: EngineResult, live_filings: list[Filing], names: dict[str, str], m
     notes = [f"Datafouten (koers controleren; deze aandelen zijn geen kandidaat): {len(problems)} ({'; '.join(problems[:5])}{' …' if len(problems) > 5 else ''})"] if problems else []
     notes += [f"Ontbrekende bron: {m}" for m in missing] + [f"Opmerking: {n}" for n in r.notes]
     if timing:
-        corrected = sorted(t for t, v in timing.items() if v.startswith("corrected"))
+        late = sorted(t for t, v in timing.items() if v.startswith("late"))
         dropped = sorted(t for t, v in timing.items() if v.startswith("unreliable"))
-        notes.append(f"8-K-tijden gecontroleerd tegen de SEC-filingpagina's voor {len(timing)} aandelen"
-                     + (f"; gecorrigeerd (tijd + New Yorkse UTC-afwijking in de SEC-data): {', '.join(corrected)}"
-                        if corrected else "")
-                     + (f"; niet betrouwbaar, 8-K's niet gebruikt: {', '.join(dropped)}" if dropped else ""))
+        notes.append(f"8-K-tijden gecontroleerd tegen de SEC-filingpagina's voor {len(timing)} aandelen; bij "
+                     f"{len(late)} staan sommige tijden 4–5 uur te laat in de SEC-data (zo gelaten: nieuws lijkt hooguit "
+                     "later, nooit eerder dan het openbaar was)"
+                     + (f"; te vroeg en daarom niet gebruikt: {', '.join(dropped)}" if dropped else ""))
     notes.append("Survivorship bias: het universum bestaat uit nu genoteerde aandelen (SEC-lijst); verdwenen aandelen "
                  "ontbreken, wat historische resultaten te gunstig kan maken.")
     notes.append("Niet beschikbaar in deze omgeving: premarket/after-hours-koersen, optievolume, short interest, "
@@ -103,12 +103,17 @@ def render(r: EngineResult, live_filings: list[Filing], names: dict[str, str], m
               + (f"; stop-loss {pct(c.stop_loss, 0)}" if c.stop_loss else "; geen stop-loss")
               + ". Als doel en stop in één dagbalk vallen, telt de stop. Kosten per kant: spread naar liquiditeit "
               f"({', '.join(f'≥{nl(f / 1e6, 0)} mln: {nl(b, 0)} bp' for f, b in c.costs.half_spread_tiers)}) + "
-              f"{nl(c.costs.slippage_bps, 0)} bp slippage + {nl(c.costs.commission_bps, 0)} bp commissie (aannames).", ""]
+              f"{nl(c.costs.slippage_bps, 0)} bp slippage + {nl(c.costs.commission_bps, 0)} bp commissie (aannames). "
+              "Bij zeer beweeglijke aandelen zijn de werkelijke spreads meestal groter, dus de resultaten na kosten "
+              "zijn eerder te gunstig dan te somber.", ""]
         rows = []
         for h in r.backtests:
             rows.append(_summary_row(f"Model {h}d", r.backtests[h].summary, r.backtests[h].max_drawdown))
             rows.append(_summary_row(f"Scannerregel {h}d", r.scanner_backtests[h].summary,
                                      r.scanner_backtests[h].max_drawdown))
+            if h in r.edge_backtests:
+                rows.append(_summary_row(f"Model stijging − daling {h}d", r.edge_backtests[h].summary,
+                                         r.edge_backtests[h].max_drawdown))
             b = r.backtests[h].benchmark
             rows.append([f"Alle aandelen {h}d (vergelijking)", b["rows"], pct(b["hit_rate"]), pct(b["drop_rate"]),
                          pct(b["mean_net_hold"], 2) + " (vasthouden)", MISSING, MISSING, MISSING, MISSING])
@@ -141,6 +146,14 @@ def render(r: EngineResult, live_filings: list[Filing], names: dict[str, str], m
     L += ["## 4. Kandidaten", ""]
     if r.candidates:
         L += [f"Gerangschikt op: {r.ranked_by}.", ""]
+        rb = r.ranking_backtest.summary if r.ranking_backtest else {}
+        if rb.get("trades") and rb["mean_net_ci"][1] < 0:
+            L += [f"> **Let op: deze rangschikking verloor in de backtest geld.** Gemiddeld {pct(rb['mean_net'], 2)} per "
+                  f"transactie na kosten (95%-BI {pct(rb['mean_net_ci'][0], 2)} tot {pct(rb['mean_net_ci'][1], 2)}); "
+                  f"+10% gehaald in {pct(rb['hit_rate'])}, ≥10% gedaald in {pct(rb['drop_rate'])}. Gebruik de lijst "
+                  "om beweeglijke aandelen te vinden, niet als koopsignaal.", ""]
+        elif rb.get("trades") and rb["mean_net_ci"][0] <= 0:
+            L += ["> Deze rangschikking is in de backtest niet aantoonbaar winstgevend na kosten (§3).", ""]
         for k in r.candidates:
             L += [f"### {k.rank}. {k.ticker} — {k.name or 'naam onbekend'}", ""]
             probs = ", ".join(f"{h}d: {pct(p)}" if p is not None else f"{h}d: niet gevalideerd"

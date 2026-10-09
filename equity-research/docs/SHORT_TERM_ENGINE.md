@@ -55,6 +55,19 @@ expected calibration error ≤ ½ × base rate; and the daily top-10 hit rate ha
 bound above the base rate. Otherwise the engine ranks without probabilities, and if neither the
 model nor the scanner rule passes the top-10 test it lists **no candidates**.
 
+**Direction.** A model for "fell 10% or more" goes through the same gate. Rankings tested in the
+backtest: the rise model, the scanner rule, and the edge ranking P(rise) − P(fall) built from the two
+out-of-sample predictions (not fitted further). The edge ranking is used for the candidates only
+when its mean net return after costs has a 95% CI above zero; otherwise the list carries a loss
+warning. First whole-market run (2026-10-09, 1.25 million stock-days, test years 2025–2026): the
+rise model's top 10 hit +10% in 44% (1d) / 56% (2d) of cases against a 1.2% / 3.5% base rate, but
+fell 10% or more in 50% / 59% and lost 1.1% / 1.6% per trade after costs: it predicts volatility,
+not direction.
+
+**8-K timing.** For some filings (per filing, not per filer) the SEC submissions time is the true
+time plus the New York UTC offset. Times are never moved earlier (that could leak news); late
+times are kept, and a filer whose data shows a time earlier than its filing page is left out.
+
 ## Backtest (`backtest.py`)
 
 Daily top 10 (eligible: price ≥ $2, 20-day dollar volume ≥ $5M, ≥ 60 days of history). Entry at

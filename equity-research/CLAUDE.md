@@ -156,7 +156,9 @@ De "stock explosion"-module (`src/equity_research/shortterm/`, methode in
 - Point-in-time: kenmerken t/m het slot van dag t, 8-K's op acceptatietijd (UTC → New York),
   instap op de opening van t+1. Nieuwe kenmerken krijgen een test dat ze niet in de toekomst kijken.
 - "Historisch winstgevend" alleen als de ondergrens van het 95%-BI van het gemiddelde netto
-  rendement (na kosten) boven 0 ligt.
+  rendement (na kosten) boven 0 ligt. Verloor de gebruikte rangschikking geld in de backtest, dan
+  staat er een waarschuwing boven de kandidaten; noem die ook in de chat. Toon bij elke kans op +10%
+  ook de kans op ≥10% daling (richtingstoets).
 - Modelverbetering via hetzelfde walk-forward-protocol; het laatste testjaar niet gebruiken om te
   tunen. Vergelijk daarna met de voorspellingslog (`predictions/`, `shortterm evaluate`).
 - Nieuws: alleen officiële bronnen (SEC 8-K) of door de gebruiker gelicentieerde bronnen; het
