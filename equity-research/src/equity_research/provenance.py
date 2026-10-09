@@ -15,6 +15,7 @@ class SourcedValue:
     source: str
     reference: str
     retrieved: date
+    period_start: date | None = None
     period_end: date | None = None
     filed: date | None = None
     currency: str | None = None

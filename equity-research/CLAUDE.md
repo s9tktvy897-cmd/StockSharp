@@ -5,6 +5,10 @@ Python-project; de C#/StockSharp-regels van de bovenliggende `AGENTS.md` gelden 
 behalve: Engels in code en commits, nooit automatisch pushen zonder opdracht.
 Chat met de gebruiker in het **Nederlands**.
 
+**Specialisatie: Amerikaanse aandelen** (NYSE, Nasdaq), US GAAP, SEC-filings (10-K, 10-Q,
+8-K), USD. Andere markten alleen op verzoek, en dan met expliciete vermelding van de
+beperkingen van de bron.
+
 ## 1. Harde regels (nooit overtreden)
 
 1. **Verzin nooit financiële gegevens.** Elk getal in een analyse komt uit een bron
@@ -71,7 +75,19 @@ de officiële filing wint, en het verschil wordt gerapporteerd.
 cd equity-research
 python -m pip install -e ".[dev]"
 python -m pytest -q                 # alle tests moeten slagen voor een analyse
+
+# live data (SEC eist een User-Agent met contactadres)
+export EQUITY_RESEARCH_USER_AGENT="equity-research naam@voorbeeld.nl"
+python -m equity_research.data AAPL
 ```
+
+- SEC-specifiek: gebruik `CompanyFacts.annual(..., as_of=...)` -- per periode de laatst
+  ingediende waarde die op `as_of` publiek was (herziene cijfers tellen pas vanaf hun
+  indieningsdatum). Comparatieve cijfers in latere 10-K's zijn geen nieuwe data.
+- Q4 staat niet los in EDGAR: Q4 = boekjaar − 9 maanden YTD. YTD-regels nooit als kwartaal lezen.
+- Banken, verzekeraars en REITs (SIC 6000-6799) krijgen geen Altman Z en een aangepaste
+  DCF (dividend/excess-return model); controleer de SIC-code uit `SecEdgar.profile`.
+- Testdata in `tests/fakes.py` is synthetisch en mag nooit in een analyse terechtkomen.
 
 - Architectuur: `docs/ARCHITECTURE.md`. Formules en drempels: `docs/METHODOLOGY.md`.
 - `data/` (cache) staat in `.gitignore`; rapporten in `reports/` worden wel gecommit.

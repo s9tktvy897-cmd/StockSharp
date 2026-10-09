@@ -30,7 +30,7 @@ Every number either comes from a cited source or is computed from such numbers.
 | Module | Responsibility | Phase |
 |---|---|---|
 | `provenance.py` | `SourcedValue`, `Assumption`: value + source metadata; missing data is explicit | 0 |
-| `data/` | Source adapters (SEC EDGAR companyfacts, FRED, Damodaran, prices) with on-disk cache, rate limiting, and the filing date of every fact (needed for point-in-time backtests) | 1 |
+| `data/` | ✅ SEC EDGAR (ticker→CIK, profile/SIC, company facts with point-in-time `annual`/`quarterly`), ✅ FRED CSV, ✅ disk cache, rate limit, retries. Prices and Damodaran: phase 4 | 1 |
 | `fundamentals/` | Map XBRL tags → normalized income/balance/cash-flow statements; ratios, CAGR, ROIC, FCF | 2 |
 | `valuation/` | WACC (CAPM), 2-stage FCFF DCF, terminal value (Gordon + exit multiple), reverse DCF, sensitivity grid, scenarios, multiples | 3 |
 | `risk/` | Altman Z (Z, Z', Z''), Beneish M, Piotroski F, volatility, beta, max drawdown, leverage | 4 |

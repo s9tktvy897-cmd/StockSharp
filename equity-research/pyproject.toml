@@ -7,7 +7,7 @@ name = "equity-research"
 version = "0.1.0"
 description = "Source-traceable fundamental equity analysis: DCF, screens, risk scores, backtests"
 requires-python = ">=3.11"
-dependencies = ["numpy", "pandas", "requests"]
+dependencies = ["numpy", "pandas"]
 
 [project.optional-dependencies]
 dev = ["pytest"]
@@ -16,5 +16,5 @@ dev = ["pytest"]
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 testpaths = ["tests"]
