@@ -63,3 +63,15 @@ def test_drop_model_and_direction_check_are_reported():
     assert "Kans op ≥10% daling" in text
     assert "Richtingstoets" in text
     assert r.oos_drop and set(r.oos_drop) == {1, 2}
+
+
+def test_edge_ranking_is_backtested_and_loss_warning_shown():
+    r, text = _render(True, 7)
+    assert set(r.edge_backtests) == {1, 2}
+    assert "Model stijging − daling" in text
+
+
+def test_cost_is_formatted_with_two_decimals():
+    r, text = _render(True, 7)
+    assert "aangenomen kosten 0,15% per kant" in text or "aangenomen kosten 0,25% per kant" in text \
+        or "aangenomen kosten 0,40% per kant" in text

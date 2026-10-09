@@ -32,6 +32,8 @@ class EngineResult:
     oos_drop: dict[int, OutOfSample] = field(default_factory=dict)  # same test for a fall of 10% or more
     backtests: dict[int, BacktestResult] = field(default_factory=dict)
     scanner_backtests: dict[int, BacktestResult] = field(default_factory=dict)
+    edge_backtests: dict[int, BacktestResult] = field(default_factory=dict)  # ranked by P(rise) - P(fall)
+    ranking_backtest: BacktestResult | None = None  # the backtest of the ranking used for the candidates
     production_model: dict[int, str] = field(default_factory=dict)
     ranked_by: str = ""
     candidates: list[Candidate] = field(default_factory=list)
@@ -93,17 +95,33 @@ def run(universe: dict[str, Bars], filings: dict[str, list[Filing]] | None, conf
                            {n: float(panel.column(n)[r]) for n in ("rvol", "ret_1d", "gap", "breakout_20")})
                           for r in order]
 
+    for h in config.horizons:
+        edge = result.oos[h].scores - result.oos_drop[h].scores
+        result.edge_backtests[h] = backtest.run(panel, edge, universe, config, h)
+
+    def profitable(bt: BacktestResult) -> bool:
+        return bool(bt.summary.get("trades")) and bt.summary["mean_net_ci"][0] > 0
+
+    edge_ok = [h for h in sorted(config.horizons, reverse=True) if profitable(result.edge_backtests[h])
+               and probabilities[h] is not None and drop_probabilities[h] is not None]
     model_ok = [h for h in sorted(config.horizons, reverse=True) if result.oos[h].gate.passed and probabilities[h] is not None]
     scanner_ok = [h for h in sorted(config.horizons, reverse=True) if result.oos[h].scanner_gate.passed]
-    if model_ok:
+    if edge_ok:
+        h = edge_ok[0]
+        ranking = probabilities[h] - drop_probabilities[h]
+        result.ranked_by = f"kans op stijging min kans op daling voor {h} dag(en) (na kosten winstgevend in de backtest)"
+        result.ranking_backtest = result.edge_backtests[h]
+    elif model_ok:
         h = model_ok[0]
         ranking, result.ranked_by = probabilities[h], f"modelscore voor {h} dag(en) ({result.production_model[h]})"
+        result.ranking_backtest = result.backtests[h]
     elif scanner_ok:
         ranking, result.ranked_by = scanner_all, f"scannerregel (gevalideerd als rangschikking voor {scanner_ok[0]} dag(en))"
+        result.ranking_backtest = result.scanner_backtests[scanner_ok[0]]
     else:
         ranking, result.ranked_by = scanner_all, "scannerregel (niet gevalideerd)"
     result.candidates, notes = select(panel, ranking, result.ranked_by, probabilities, result.oos, result.backtests,
-                                      bars_source, names, filings, problems, config, bool(model_ok or scanner_ok),
-                                      drop_probabilities)
+                                      bars_source, names, filings, problems, config,
+                                      bool(edge_ok or model_ok or scanner_ok), drop_probabilities)
     result.notes += notes
     return result

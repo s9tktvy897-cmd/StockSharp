@@ -88,8 +88,9 @@ def select(panel: Panel, ranking: np.ndarray, ranked_by: str, probabilities: dic
         if signals["gap"] > 0.05 or signals["ret_1d"] > 0.10:
             risks.append("al sterk gestegen: een deel van de beweging kan al in de koers zitten (terugvalrisico)")
         spread = config.costs.per_side(panel.dollar_volume[row])
-        risks.append(f"aangenomen kosten {pct(spread).replace(',0%', '%')} per kant "
-                     f"(liquiditeit {panel.dollar_volume[row] / 1e6:,.0f} mln USD/dag)".replace(",", "."))
+        liquidity = f"{panel.dollar_volume[row] / 1e6:,.0f}".replace(",", ".")
+        risks.append(f"aangenomen kosten {spread * 100:.2f}% per kant".replace(".", ",")
+                     + f" (liquiditeit {liquidity} mln USD/dag)")
         for f in recent:
             if set(f.items) & cat.NEGATIVE:
                 risks.append(f"8-K {cat.leaning(f.items)} op {f.accepted_et:%Y-%m-%d}")

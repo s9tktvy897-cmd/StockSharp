@@ -117,24 +117,22 @@ def _sample(filings: list[Filing]) -> list[Filing]:
 
 def calibrate_times(filings: list[Filing], accepted_on_index, tolerance_minutes: int = 2) -> tuple[list[Filing], str]:
     """Check the submissions acceptance times against the filing index pages (``accepted_on_index``
-    returns the time the page shows). Some filers' submissions data carry the true time plus the
-    New York UTC offset (seen for AAPL, checked 2026-10-09); those are corrected. Any other
-    disagreement makes the timing unreliable and the filings are dropped."""
+    returns the time the page shows). Checked live 2026-10-09: for some filings -- per filing, not
+    per filer -- the submissions time is the true time plus the New York UTC offset (4-5 h late).
+    Shifting a time earlier could leak news that was not yet public, so times are never corrected:
+    late times are kept (conservative); a time EARLIER than the filing page drops the filer's 8-Ks."""
     sample = _sample(filings)
     if not sample:
         return filings, "no filings"
     diffs = [(f.accepted - accepted_on_index(f.url)) for f in sample]
     tol = timedelta(minutes=tolerance_minutes)
+    if any(d < -tol for d in diffs):
+        return [], "unreliable (submissions times earlier than the filing pages: " + \
+            ", ".join(f"{d.total_seconds() / 3600:+.1f}h" for d in diffs) + ")"
     if all(abs(d) <= tol for d in diffs):
         return filings, "verified"
-    if all(abs(d - _ny_offset(f.accepted - d)) <= tol for f, d in zip(sample, diffs)):
-        fixed = []
-        for f in filings:
-            guess = f.accepted - timedelta(hours=4)
-            fixed.append(Filing(f.ticker, f.cik, f.accession, f.form, f.items, f.accepted - _ny_offset(guess), f.url))
-        return fixed, "corrected (submissions time = true time + New York offset)"
-    return [], "unreliable (submissions times disagree with the filing pages: " + \
-        ", ".join(f"{d.total_seconds() / 3600:+.1f}h" for d in diffs) + ")"
+    late = max(d for d in diffs).total_seconds() / 3600
+    return filings, f"late by up to {late:.0f}h in the submissions data (kept as is: never earlier than the truth)"
 
 
 def parse_current_feed(xml_text: str) -> list[Filing]:

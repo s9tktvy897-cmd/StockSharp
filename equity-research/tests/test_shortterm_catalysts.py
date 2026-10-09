@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 
@@ -86,19 +86,27 @@ def test_correct_submission_times_need_no_change():
     assert status == "verified" and fixed == filings
 
 
-def test_times_shifted_by_the_new_york_offset_are_corrected():
-    # Seen live for AAPL: submissions = true UTC + 4h (summer) / + 5h (winter); filing page = true time.
+def test_shifted_times_are_kept_never_moved_earlier():
+    # Live 2026-10-09: per filing (not per filer) some submissions times are the true time + the New York
+    # offset. Moving any filing earlier could leak future news, so times are kept as they are (late at worst).
     true = [datetime(2025, 7, 30, 20, 30, tzinfo=timezone.utc), datetime(2026, 1, 29, 21, 30, tzinfo=timezone.utc)]
     shifted = [_filing(datetime(2025, 7, 31, 0, 30, tzinfo=timezone.utc)), _filing(datetime(2026, 1, 30, 2, 30, tzinfo=timezone.utc))]
     index = {f.url: t for f, t in zip(shifted, true)}
-    fixed, status = catalysts.calibrate_times(shifted, lambda url: index[url])
-    assert status.startswith("corrected")
-    assert [f.accepted for f in fixed] == true
+    kept, status = catalysts.calibrate_times(shifted, lambda url: index[url])
+    assert kept == shifted
+    assert status.startswith("late")
 
 
-def test_inconsistent_times_are_rejected():
+def test_mixed_times_are_kept_too():
     filings = [_filing(datetime(2025, 7, 31, 20, 30, tzinfo=timezone.utc)),
                _filing(datetime(2026, 1, 29, 21, 30, tzinfo=timezone.utc))]
-    index = {filings[0].url: filings[0].accepted, filings[1].url: filings[1].accepted.replace(hour=12)}
-    fixed, status = catalysts.calibrate_times(filings, lambda url: index[url])
-    assert fixed == [] and status.startswith("unreliable")
+    index = {filings[0].url: filings[0].accepted, filings[1].url: filings[1].accepted - timedelta(hours=5)}
+    kept, status = catalysts.calibrate_times(filings, lambda url: index[url])
+    assert kept == filings and status.startswith("late")
+
+
+def test_times_earlier_than_the_filing_page_are_dropped():
+    filings = [_filing(datetime(2025, 7, 31, 20, 30, tzinfo=timezone.utc))]
+    index = {filings[0].url: filings[0].accepted + timedelta(hours=3)}  # data says earlier than the truth
+    kept, status = catalysts.calibrate_times(filings, lambda url: index[url])
+    assert kept == [] and status.startswith("unreliable")
