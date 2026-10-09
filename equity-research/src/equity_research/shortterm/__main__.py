@@ -10,6 +10,7 @@ import argparse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from equity_research.report import context
 from equity_research.report.markdown import _git_revision
 from equity_research.shortterm import catalysts as cat
 from equity_research.shortterm import engine, predictions, report
@@ -54,6 +55,7 @@ def main(argv: list[str] | None = None) -> None:
         p.add_argument("--max-tickers", type=int)
         p.add_argument("--no-sec", action="store_true", help="skip SEC 8-K catalysts")
         p.add_argument("--output-dir", type=Path, default=REPORTS)
+        p.add_argument("--context", type=Path, help="Markdown with sourced web context (each bullet: URL + date)")
     c = sub.add_parser("catalysts")
     c.add_argument("--hours", type=int, default=24)
     args = parser.parse_args(argv)
@@ -85,8 +87,10 @@ def main(argv: list[str] | None = None) -> None:
     gates = {h: o.gate.passed for h, o in result.oos.items()}
     log_path = predictions.log(result.candidates, scan_time, code, PREDICTIONS, gates)
     check = predictions.evaluate(predictions.read(PREDICTIONS), data.bars, config) if data.bars else None
-    path = report.write(report.render(result, live, {**data.names, **live_names}, data.missing, check, code),
-                        args.output_dir, scan_time)
+    text = report.render(result, live, {**data.names, **live_names}, data.missing, check, code, data.timing)
+    if args.context:
+        text += "\n" + "\n".join(context.section(context.load(args.context), "8"))
+    path = report.write(text, args.output_dir, scan_time)
     print(f"report written: {path}")
     print(f"candidates: {len(result.candidates)}" + (f"; logged to {log_path}" if log_path else ""))
     for note in result.notes + data.missing[:5]:

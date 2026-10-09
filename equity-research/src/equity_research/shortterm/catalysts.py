@@ -101,6 +101,42 @@ def parse_submissions(data: dict, ticker: str) -> list[Filing]:
     return sorted(out, key=lambda f: f.accepted)
 
 
+def _ny_offset(moment: datetime) -> timedelta:
+    """Hours New York is behind UTC at ``moment`` (4 in summer, 5 in winter)."""
+    return -moment.astimezone(NEW_YORK).utcoffset()
+
+
+def _sample(filings: list[Filing]) -> list[Filing]:
+    """The latest filing, plus the latest one from the other daylight-saving season if any."""
+    if not filings:
+        return []
+    latest = filings[-1]
+    other = next((f for f in reversed(filings) if _ny_offset(f.accepted) != _ny_offset(latest.accepted)), None)
+    return [latest] + ([other] if other else [])
+
+
+def calibrate_times(filings: list[Filing], accepted_on_index, tolerance_minutes: int = 2) -> tuple[list[Filing], str]:
+    """Check the submissions acceptance times against the filing index pages (``accepted_on_index``
+    returns the time the page shows). Some filers' submissions data carry the true time plus the
+    New York UTC offset (seen for AAPL, checked 2026-10-09); those are corrected. Any other
+    disagreement makes the timing unreliable and the filings are dropped."""
+    sample = _sample(filings)
+    if not sample:
+        return filings, "no filings"
+    diffs = [(f.accepted - accepted_on_index(f.url)) for f in sample]
+    tol = timedelta(minutes=tolerance_minutes)
+    if all(abs(d) <= tol for d in diffs):
+        return filings, "verified"
+    if all(abs(d - _ny_offset(f.accepted - d)) <= tol for f, d in zip(sample, diffs)):
+        fixed = []
+        for f in filings:
+            guess = f.accepted - timedelta(hours=4)
+            fixed.append(Filing(f.ticker, f.cik, f.accession, f.form, f.items, f.accepted - _ny_offset(guess), f.url))
+        return fixed, "corrected (submissions time = true time + New York offset)"
+    return [], "unreliable (submissions times disagree with the filing pages: " + \
+        ", ".join(f"{d.total_seconds() / 3600:+.1f}h" for d in diffs) + ")"
+
+
 def parse_current_feed(xml_text: str) -> list[Filing]:
     ns = {"a": "http://www.w3.org/2005/Atom"}
     root = ET.fromstring(xml_text.encode("latin-1", errors="replace") if isinstance(xml_text, str) else xml_text)

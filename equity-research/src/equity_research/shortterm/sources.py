@@ -3,7 +3,9 @@ bars from Stooq (secondary) or local CSV files. Failures are returned as message
 
 from __future__ import annotations
 
+import html
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -14,7 +16,8 @@ from equity_research.data.http import HttpClient, user_agent_from_env
 from equity_research.data.prices import STOOQ_URL, stooq_symbol
 from equity_research.data.sec_edgar import SUBMISSIONS_URL, format_cik
 from equity_research.shortterm.bars import Bars, load_csv_dir, parse_ohlcv_csv
-from equity_research.shortterm.catalysts import CURRENT_FEED_URL, Filing, parse_current_feed, parse_submissions
+from equity_research.shortterm.catalysts import (CURRENT_FEED_URL, NEW_YORK, Filing, calibrate_times,
+                                                 parse_current_feed, parse_submissions)
 from equity_research.valuation.run import FETCH_ERRORS
 
 EXCHANGE_TICKERS_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
@@ -36,6 +39,7 @@ class LoadResult:
     names: dict[str, str] = field(default_factory=dict)
     missing: list[str] = field(default_factory=list)
     bars_source: str = ""
+    timing: dict[str, str] = field(default_factory=dict)  # ticker -> how the 8-K times were checked
 
 
 class ShortTermSources:
@@ -56,9 +60,20 @@ class ShortTermSources:
                 out[r["ticker"].upper()] = Listing(r["ticker"].upper(), format_cik(r["cik"]), r["name"], r["exchange"])
         return out
 
-    def filings(self, listing: Listing, max_age: timedelta = timedelta(hours=1)) -> list[Filing]:
+    def filings(self, listing: Listing, max_age: timedelta = timedelta(hours=1)) -> tuple[list[Filing], str]:
+        """8-K filings with acceptance times checked against the filing pages (see
+        ``catalysts.calibrate_times``)."""
         data = json.loads(self._get(SUBMISSIONS_URL.format(cik=listing.cik), max_age))
-        return parse_submissions(data, listing.ticker)
+        return calibrate_times(parse_submissions(data, listing.ticker), self.accepted_on_index)
+
+    def accepted_on_index(self, url: str) -> datetime:
+        """The 'Accepted' time (New York) shown on an EDGAR filing index page. Filed documents do
+        not change, so the page is cached without expiry."""
+        text = html.unescape(re.sub(r"<[^>]+>", " ", self._get(url, None).decode("latin-1")))
+        match = re.search(r"Accepted\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", text)
+        if not match:
+            raise ValueError(f"no acceptance time on {url}")
+        return datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=NEW_YORK).astimezone(timezone.utc)
 
     def current_8k(self, since: datetime, max_pages: int = 10) -> list[Filing]:
         """New 8-Ks from the EDGAR live feed, newest first, back to ``since`` (UTC)."""
@@ -119,7 +134,10 @@ def load(tickers: list[str] | None, bars_dir: Path | None, use_stooq: bool, use_
             if ticker not in listings:
                 continue
             try:
-                result.filings[ticker] = sources.filings(listings[ticker])
+                result.filings[ticker], result.timing[ticker] = sources.filings(listings[ticker])
             except FETCH_ERRORS as error:
                 result.missing.append(f"SEC filings {ticker}: {error}")
+                continue
+            if result.timing[ticker].startswith("unreliable"):
+                result.missing.append(f"SEC 8-K times {ticker}: {result.timing[ticker]}; its 8-Ks are not used")
     return result

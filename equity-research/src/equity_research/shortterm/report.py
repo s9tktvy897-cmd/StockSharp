@@ -36,7 +36,7 @@ SUMMARY_HEADER = ["", "Trades", "+10% gehaald (95%-BI)", "≥10% gedaald", "Gem.
 
 
 def render(r: EngineResult, live_filings: list[Filing], names: dict[str, str], missing: list[str],
-           evaluation: dict | None, code_version: str) -> str:
+           evaluation: dict | None, code_version: str, timing: dict[str, str] | None = None) -> str:
     c = r.config
     L = [f"# Kortetermijnscan (+{pct(c.target, 0)} binnen 1–2 handelsdagen) — {r.scan_time:%Y-%m-%d %H:%M} UTC", "",
          DISCLAIMER, ""]
@@ -56,6 +56,13 @@ def render(r: EngineResult, live_filings: list[Filing], names: dict[str, str], m
     problems = [p for ps in r.data_problems.values() for p in ps]
     notes = [f"Datafouten: {len(problems)} ({'; '.join(problems[:5])}{' …' if len(problems) > 5 else ''})"] if problems else []
     notes += [f"Ontbrekende bron: {m}" for m in missing] + [f"Opmerking: {n}" for n in r.notes]
+    if timing:
+        corrected = sorted(t for t, v in timing.items() if v.startswith("corrected"))
+        dropped = sorted(t for t, v in timing.items() if v.startswith("unreliable"))
+        notes.append(f"8-K-tijden gecontroleerd tegen de SEC-filingpagina's voor {len(timing)} aandelen"
+                     + (f"; gecorrigeerd (tijd + New Yorkse UTC-afwijking in de SEC-data): {', '.join(corrected)}"
+                        if corrected else "")
+                     + (f"; niet betrouwbaar, 8-K's niet gebruikt: {', '.join(dropped)}" if dropped else ""))
     notes.append("Survivorship bias: het universum bestaat uit nu genoteerde aandelen (SEC-lijst); verdwenen aandelen "
                  "ontbreken, wat historische resultaten te gunstig kan maken.")
     notes.append("Niet beschikbaar in deze omgeving: premarket/after-hours-koersen, optievolume, short interest, "

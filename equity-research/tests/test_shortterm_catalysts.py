@@ -72,3 +72,33 @@ def test_no_filing_after_decision_leaks_into_features():
     assert f["cat_overnight_earnings"][1] == 1
     later = Filing("SYN", "42", "Z", "8-K", ("2.02",), datetime(2020, 1, 8, 14, 0, 1, tzinfo=timezone.utc), "u")
     assert catalysts.features(bars, [later])["cat_overnight_earnings"][1] == 0
+
+
+def _filing(accepted_utc):
+    return Filing("SYN", "42", f"A-{accepted_utc:%m%d%H}", "8-K", ("2.02",), accepted_utc, f"u{accepted_utc:%m%d}")
+
+
+def test_correct_submission_times_need_no_change():
+    filings = [_filing(datetime(2025, 7, 31, 20, 30, tzinfo=timezone.utc)),
+               _filing(datetime(2026, 1, 29, 21, 30, tzinfo=timezone.utc))]
+    index = {f.url: f.accepted for f in filings}  # the filing pages agree
+    fixed, status = catalysts.calibrate_times(filings, lambda url: index[url])
+    assert status == "verified" and fixed == filings
+
+
+def test_times_shifted_by_the_new_york_offset_are_corrected():
+    # Seen live for AAPL: submissions = true UTC + 4h (summer) / + 5h (winter); filing page = true time.
+    true = [datetime(2025, 7, 30, 20, 30, tzinfo=timezone.utc), datetime(2026, 1, 29, 21, 30, tzinfo=timezone.utc)]
+    shifted = [_filing(datetime(2025, 7, 31, 0, 30, tzinfo=timezone.utc)), _filing(datetime(2026, 1, 30, 2, 30, tzinfo=timezone.utc))]
+    index = {f.url: t for f, t in zip(shifted, true)}
+    fixed, status = catalysts.calibrate_times(shifted, lambda url: index[url])
+    assert status.startswith("corrected")
+    assert [f.accepted for f in fixed] == true
+
+
+def test_inconsistent_times_are_rejected():
+    filings = [_filing(datetime(2025, 7, 31, 20, 30, tzinfo=timezone.utc)),
+               _filing(datetime(2026, 1, 29, 21, 30, tzinfo=timezone.utc))]
+    index = {filings[0].url: filings[0].accepted, filings[1].url: filings[1].accepted.replace(hour=12)}
+    fixed, status = catalysts.calibrate_times(filings, lambda url: index[url])
+    assert fixed == [] and status.startswith("unreliable")
