@@ -83,6 +83,7 @@ python -m equity_research.fundamentals AAPL   # jaarcijfers, ratio's, groei, che
 python -m equity_research.fundamentals AAPL --as-of 2020-01-01   # point-in-time
 python -m equity_research.valuation AAPL      # DCF, scenario's, gevoeligheid, reverse DCF
 python -m equity_research.valuation AAPL --industry "<Damodaran-industrie>"   # bottom-up beta
+python -m equity_research.risk AAPL           # Piotroski, Altman, Beneish, marktrisico, screens
 ```
 
 - Koers (Stooq), ERP en sectorbeta (Damodaran) mogen bij een geblokkeerde bron alleen met bron

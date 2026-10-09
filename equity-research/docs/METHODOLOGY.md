@@ -83,12 +83,34 @@ Solve for the stage-1 growth rate that makes DCF value = current market price (b
   Not applicable to banks/insurers -- the system must refuse and say so.
 - Beneish M-score (1999), 8-variable: > −1.78 flags possible earnings manipulation.
 
+### Implementation (phase 4, `risk/scores.py`)
+
+- **Piotroski** signals for year t (assets at the beginning of the year = t−1 year end):
+  ROA > 0; CFO > 0; ROA up; CFO/assets > ROA; long-term debt / average assets not up; current
+  ratio up; diluted shares not up (proxy for "no common equity issued"); gross margin up; asset
+  turnover (sales / beginning assets) up. A signal with missing inputs is not counted; the score
+  is reported as "x of y testable".
+- **Altman** variant by SIC: 2000–3999 → Z (1968): 1.2·X1 + 1.4·X2 + 3.3·X3 + 0.6·X4 + 1.0·X5,
+  X4 = market value of equity at fiscal year end / total liabilities, zones > 2.99 safe,
+  < 1.81 distress. Others → Z'' (1995): 6.56·X1 + 3.26·X2 + 6.72·X3 + 1.05·X4 with book equity,
+  zones > 2.60 safe, < 1.10 distress. SIC 6000–6799 → refused. When the market value is missing
+  the book-based Z'' is shown as a labelled fallback, but the screen does not use its zone.
+  Negative retained earnings after buybacks depress X2 without signalling distress.
+- **Beneish** (1999) M = −4.84 + 0.920·DSRI + 0.528·GMI + 0.404·AQI + 0.892·SGI + 0.115·DEPI
+  − 0.172·SGAI + 4.679·TATA − 0.327·LVGI; AQI = 1 − (current assets + net PP&E) / total assets
+  (ratio t / t−1); DEPI uses D&A from the cash-flow statement; TATA = (net income − CFO) / total
+  assets (cash-flow form, as in Beneish, Lee & Nichols 2013); LVGI uses current liabilities +
+  non-current long-term debt. Flag above −1.78.
+- **Screens** (`screening/screens.py`) are three-valued: a missing input makes a criterion
+  unknown; a screen fails on any failed criterion, passes only when all pass. For the growth
+  screen, ROIC falls back to return on capital incl. cash when invested capital is ≤ 0 (labelled).
+
 ## Classification (initial thresholds, to be validated in backtests)
 
 - **Undervalued**: base-case intrinsic value ≥ 1.25 × price (25% margin of safety),
   Piotroski ≥ 5, Altman not in distress zone, Beneish below threshold.
-- **Growth**: revenue CAGR 5y ≥ 10%, positive and rising FCF in ≥ 3 of last 5 years,
-  ROIC > WACC.
+- **Growth**: revenue CAGR 5y ≥ 10%, FCF positive and higher than the year before in ≥ 3 of
+  the last 5 years, ROIC > WACC.
 
 Thresholds are hypotheses. Phase 5 tests them point-in-time; results and their biases are
 documented here once available.
