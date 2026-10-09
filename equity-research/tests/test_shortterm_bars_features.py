@@ -71,3 +71,9 @@ def test_cost_tiers():
     assert costs.per_side(100e6) == pytest.approx(15 / 1e4)
     assert costs.per_side(20e6) == pytest.approx(25 / 1e4)
     assert costs.per_side(1e6) == pytest.approx(40 / 1e4)
+
+
+def test_bot_check_page_is_reported_as_such():
+    page = "<!DOCTYPE html><html><body><noscript>This site requires JavaScript to verify your browser.</noscript>"
+    with pytest.raises(ValueError, match="bot check"):
+        parse_ohlcv_csv(page, "AAPL", "Stooq (secondary)")

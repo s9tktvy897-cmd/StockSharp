@@ -25,6 +25,9 @@ def stooq_symbol(ticker: str) -> str:
 
 
 def parse_stooq_csv(text: str, symbol: str, retrieved: date, reference: str) -> list[SourcedValue]:
+    if text.lstrip().lower().startswith(("<!doctype", "<html")):
+        raise MissingDataError(f"Stooq returned {'a JavaScript bot check' if 'javascript' in text.lower() else 'an HTML page'}"
+                               f" instead of CSV for {symbol}")
     rows = list(csv.DictReader(io.StringIO(text.strip())))
     if not rows or "Close" not in rows[0] or "Date" not in rows[0]:
         raise MissingDataError(f"Stooq returned no price data for {symbol}: {text[:60]!r}")

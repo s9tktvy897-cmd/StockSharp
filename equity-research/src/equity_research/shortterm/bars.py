@@ -38,6 +38,9 @@ class Bars:
 
 
 def parse_ohlcv_csv(text: str, ticker: str, source: str) -> Bars:
+    if text.lstrip().lower().startswith(("<!doctype", "<html")):
+        hint = "a JavaScript bot check" if "javascript" in text.lower() else "an HTML page"
+        raise ValueError(f"{ticker}: {source} returned {hint} instead of CSV data")
     reader = csv.DictReader(io.StringIO(text.strip()))
     fields = {name.lower(): name for name in reader.fieldnames or []}
     needed = ("date", "open", "high", "low", "close", "volume")
