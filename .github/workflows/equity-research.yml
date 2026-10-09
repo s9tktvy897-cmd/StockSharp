@@ -56,6 +56,8 @@ jobs:
           restore-keys: equity-research-cache-
       - name: Scan
         run: python -m equity_research.shortterm scan --yahoo --max-tickers "${{ github.event.inputs.max_tickers || '0' }}"
+      - name: Show report
+        run: cat reports/shortterm/scan_*.md
       - name: Check earlier predictions
         run: python -m equity_research.shortterm evaluate --yahoo --no-sec --max-tickers "${{ github.event.inputs.max_tickers || '0' }}" || true
       - uses: actions/upload-artifact@v4
