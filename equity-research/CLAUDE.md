@@ -84,6 +84,10 @@ python -m equity_research.data AAPL
 - SEC-specifiek: gebruik `CompanyFacts.annual(..., as_of=...)` -- per periode de laatst
   ingediende waarde die op `as_of` publiek was (herziene cijfers tellen pas vanaf hun
   indieningsdatum). Comparatieve cijfers in latere 10-K's zijn geen nieuwe data.
+- Aandelenaantallen en per-aandeelcijfers zijn niet split-gecorrigeerd: de laatste filing per
+  periode kan van vóór een split zijn (AAPL: 7:1 in 2014, 4:1 in 2020 geven gemengde reeksen).
+  Corrigeer met de splitfactor en vermeld dat in "Datakwaliteit". `fy`/`fp` van EDGAR horen bij
+  de filing, niet bij de periode (`filing_fiscal_year`); selecteer periodes op `period_end`.
 - Q4 staat niet los in EDGAR: Q4 = boekjaar − 9 maanden YTD. YTD-regels nooit als kwartaal lezen.
 - Banken, verzekeraars en REITs (SIC 6000-6799) krijgen geen Altman Z en een aangepaste
   DCF (dividend/excess-return model); controleer de SIC-code uit `SecEdgar.profile`.
