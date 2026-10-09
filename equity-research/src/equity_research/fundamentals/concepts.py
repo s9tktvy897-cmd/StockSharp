@@ -68,8 +68,10 @@ LINE_ITEMS: tuple[LineItem, ...] = (
     _i("long_term_debt_noncurrent", "LongTermDebtNoncurrent", "LongTermDebtAndCapitalLeaseObligations"),
     _i("long_term_debt_current", "LongTermDebtCurrent", "LongTermDebtAndCapitalLeaseObligationsCurrent"),
     _i("commercial_paper", "CommercialPaper"),
-    _i("short_term_borrowings", "ShortTermBorrowings", "OtherShortTermBorrowings"),
+    # OtherShortTermBorrowings is left out: filers use it for commercial paper too (AAPL 10-Qs, 2020).
+    _i("short_term_borrowings", "ShortTermBorrowings"),
     _i("equity", "StockholdersEquity"),
+    _i("minority_interest", "MinorityInterest"),
     _i("equity_including_nci", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"),
     _i("liabilities_and_equity", "LiabilitiesAndStockholdersEquity"),
     _i("retained_earnings", "RetainedEarningsAccumulatedDeficit"),
@@ -77,5 +79,10 @@ LINE_ITEMS: tuple[LineItem, ...] = (
 
 DEBT_COMPONENTS = ("long_term_debt_noncurrent", "long_term_debt_current", "commercial_paper", "short_term_borrowings")
 
+# Components a company may simply not have: never reported means zero (with a note).
+OPTIONAL_ITEMS = DEBT_COMPONENTS + ("short_term_investments", "long_term_investments", "minority_interest")
+
 # Concepts whose restatements between filings reveal stock splits.
 SPLIT_EVIDENCE_CONCEPTS = ("WeightedAverageNumberOfDilutedSharesOutstanding", "WeightedAverageNumberOfSharesOutstandingBasic")
+
+ITEMS_BY_NAME = {item.name: item for item in LINE_ITEMS}

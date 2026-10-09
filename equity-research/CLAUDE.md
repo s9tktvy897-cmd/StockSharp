@@ -81,7 +81,15 @@ export EQUITY_RESEARCH_USER_AGENT="equity-research naam@voorbeeld.nl"
 python -m equity_research.data AAPL           # ruwe SEC-reeksen
 python -m equity_research.fundamentals AAPL   # jaarcijfers, ratio's, groei, checks, datakwaliteit
 python -m equity_research.fundamentals AAPL --as-of 2020-01-01   # point-in-time
+python -m equity_research.valuation AAPL      # DCF, scenario's, gevoeligheid, reverse DCF
+python -m equity_research.valuation AAPL --industry "<Damodaran-industrie>"   # bottom-up beta
 ```
+
+- Koers (Stooq), ERP en sectorbeta (Damodaran) mogen bij een geblokkeerde bron alleen met bron
+  worden ingevoerd: `--price 231.50 --price-source "Nasdaq official close 2026-10-08"` (idem
+  `--beta`, `--erp`, `--cost-of-debt`). Nooit een waarde uit het geheugen invullen.
+- De Stooq- en Damodaran-parsers zijn gebouwd zonder live toegang: controleer bij het eerste
+  live gebruik de uitkomst tegen de webpagina en pas zo nodig de parser + tests aan.
 
 - SEC-specifiek: gebruik `CompanyFacts.annual(..., as_of=...)` -- per periode de laatst
   ingediende waarde die op `as_of` publiek was (herziene cijfers tellen pas vanaf hun

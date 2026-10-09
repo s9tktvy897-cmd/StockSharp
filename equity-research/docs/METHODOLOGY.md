@@ -46,9 +46,35 @@ disagreement > 0.5% between tags for the same period are reported as data-qualit
 - Equity value = EV − net debt − minorities + non-operating assets; per share on diluted shares.
 - Always report: TV share of EV, sensitivity grid (WACC ±2pp × g ±1pp), bear/base/bull.
 
+### Implementation (phase 3, `valuation/`)
+
+- **Base period**: trailing twelve months from the latest 10-Q (fiscal year + current YTD −
+  prior-year YTD); balance sheet and diluted shares from the same filing. Cash flows fall one
+  year apart from the base period end and are discounted to the valuation date.
+- **Forecast**: 5 years at the stage-1 revenue growth, then 5 years fading linearly to terminal
+  growth. EBIT margin, tax rate, D&A and capex (% of revenue) are constant; ΔNWC = NWC% × Δrevenue.
+- **Terminal FCFF** = NOPAT_{n+1} × (1 − g / RONIC): the reinvestment needed to grow at g when new
+  capital earns RONIC. The model refuses g ≥ RONIC and WACC ≤ g. The exit-multiple cross-check
+  is reported as the implied EV/EBIT of the Gordon terminal value.
+- **Equity bridge**: EV + cash + all marketable securities − debt (book) − minority interest;
+  operating leases are not counted as debt (consistent with FCFF before lease payments).
+- **WACC inputs**: r_f = 10-year Treasury (FRED DGS10). ERP = Damodaran implied ERP (FCFE). Beta:
+  manual > bottom-up (Damodaran unlevered industry beta, re-levered with Hamada at market D/E; the
+  industry is an analyst choice) > 60-month regression vs S&P 500. Cost of debt = interest
+  expense / average debt of the latest year that reports interest (flagged when stale). Tax =
+  mean effective rate of the last 3 years. E at market value, D at book value.
+- **Default assumptions** (`valuation/assumptions.py`), each with a rationale:
+  stage-1 growth bear/base/bull = min/median/max of the 3/5/10-year revenue CAGRs; EBIT margin
+  = min of 5y / mean of 3y / max of 5y; tax, D&A, capex, NWC = 3-year means; terminal growth =
+  market-implied 10-year inflation (FRED T10YIE, zero real growth) capped at r_f; RONIC = 3-year
+  mean return on capital incl. cash (bear: RONIC = WACC, no excess returns on new capital).
+- **Manual inputs** are accepted only with a source text (`--price … --price-source …`) and are
+  labelled "manual input" in the output.
+
 ## Reverse DCF
 
-Solve for the stage-1 growth rate that makes DCF value = current market price.
+Solve for the stage-1 growth rate that makes DCF value = current market price (bisection over
+−50%…+100%; the model reports when no growth in that range reproduces the price).
 
 ## Quality and risk scores
 

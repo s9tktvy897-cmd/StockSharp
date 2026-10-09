@@ -13,8 +13,8 @@ from equity_research.fundamentals.statements import AnnualStatements
 from equity_research.data.sec_edgar import EdgarFact
 from equity_research.provenance import DerivedValue
 
-# Balance-sheet components (investments, debt parts) that a company may simply not have: an item
-# it never reports counts as zero with a note; a gap in an item it does report is missing data.
+# Optional components (concepts.OPTIONAL_ITEMS): an item a company never reports counts as zero
+# with a note; a gap in an item it does report is missing data.
 
 
 def derive(name: str, unit: str, formula: str, year: date | None, fn: Callable[..., float], note: str | None = None,
