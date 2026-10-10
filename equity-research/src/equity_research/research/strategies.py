@@ -84,11 +84,20 @@ def _score(kind: str, fitted, X, rows, horizon: int, vol20: np.ndarray, threshol
 def fitted_scores(kind: str, panel: Panel, horizon: int, labels: dict[str, np.ndarray], usable: np.ndarray,
                   vol20: np.ndarray, dev_end: date, holdout_start: date) -> Fitted:
     """Walk-forward out-of-sample scores in the development period and holdout scores."""
+    return fitted_scores_many((kind,), panel, horizon, labels, usable, vol20, dev_end, holdout_start)[kind]
+
+
+def fitted_scores_many(kinds: tuple[str, ...], panel: Panel, horizon: int, labels: dict[str, np.ndarray],
+                       usable: np.ndarray, vol20: np.ndarray, dev_end: date, holdout_start: date) -> dict[str, Fitted]:
+    """As ``fitted_scores`` for several kinds that share one fit (MODEL_B and MODEL_C use the same
+    regressors), so the models are trained once."""
+    kind = kinds[0]
+    assert all(_fit_group(k) == _fit_group(kind) for k in kinds)
     rng = np.random.default_rng(protocol.SEED + horizon)
     y = labels["hit" if kind == "EXISTING_TARGET10" else "up" if kind == "MODEL_A_DIRECTION" else "net"]
     ok = usable & np.isfinite(y)
     dev_mask = np.array([d <= dev_end for d in panel.dates])
-    dev = np.full(len(panel.dates), np.nan)
+    dev = {k: np.full(len(panel.dates), np.nan) for k in kinds}
     chosen = {}
     folds = evaluation.walk_forward(panel.dates[dev_mask], min_train_years=2, embargo_days=horizon + 3)
     dev_index = np.where(dev_mask)[0]
@@ -99,10 +108,11 @@ def fitted_scores(kind: str, panel: Panel, horizon: int, labels: dict[str, np.nd
         if len(train) < 1000 or not len(val) or not len(test):
             continue
         fitted = _fit(kind, panel.X, y, train, val)
-        dev[test] = _score(kind, fitted, panel.X, test, horizon, vol20, 0.0)
+        for k in kinds:
+            dev[k][test] = _score(k, fitted, panel.X, test, horizon, vol20, 0.0)
         chosen[fold.test_year] = getattr(fitted, "name", "ridge + gradient boosting")
     # holdout: train on development data only, choose/calibrate on its last year
-    holdout = np.full(len(panel.dates), np.nan)
+    holdout = {k: np.full(len(panel.dates), np.nan) for k in kinds}
     val_start = date(dev_end.year - 1, dev_end.month, min(dev_end.day, 28))
     embargo = timedelta(days=horizon + 3)
     train = _sample(np.where(ok & np.array([d < val_start - embargo for d in panel.dates]))[0], rng)
@@ -110,9 +120,14 @@ def fitted_scores(kind: str, panel: Panel, horizon: int, labels: dict[str, np.nd
     test = np.where(usable & np.array([d >= holdout_start for d in panel.dates]))[0]
     if len(train) >= 1000 and len(val) and len(test):
         fitted = _fit(kind, panel.X, y, train, val)
-        holdout[test] = _score(kind, fitted, panel.X, test, horizon, vol20, 0.0)
+        for k in kinds:
+            holdout[k][test] = _score(k, fitted, panel.X, test, horizon, vol20, 0.0)
         chosen["holdout"] = getattr(fitted, "name", "ridge + gradient boosting")
-    return Fitted(dev, holdout, chosen)
+    return {k: Fitted(dev[k], holdout[k], dict(chosen)) for k in kinds}
+
+
+def _fit_group(kind: str) -> str:
+    return "regressors" if kind in ("MODEL_B_EXPECTED_RETURN", "MODEL_C_RISK_ADJUSTED") else kind
 
 
 def _fit(kind, X, y, train, val):

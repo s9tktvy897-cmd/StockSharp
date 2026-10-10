@@ -50,6 +50,10 @@ class Prepared:
     dev_end: date
     holdout_start: date
     calendar: list[date]
+    ordinals: np.ndarray = None  # panel dates as ordinals (fast window masks)
+
+    def window(self, start: date, end: date) -> np.ndarray:
+        return (self.ordinals >= start.toordinal()) & (self.ordinals <= end.toordinal())
 
 
 def prepare(inputs: Inputs, config: Config | None = None) -> Prepared:
@@ -77,11 +81,11 @@ def prepare(inputs: Inputs, config: Config | None = None) -> Prepared:
     spy_ret = {d: float(spy.close[i] / spy.close[i - 1] - 1) for i, d in enumerate(spy.dates) if i}
     dev_end = protocol.HOLDOUT_START - timedelta(days=protocol.EMBARGO_DAYS)
     return Prepared(panel, market, usable, labels, vol20, panel.dollar_volume.astype(float), spy_up, spy_ret,
-                    dev_end, protocol.HOLDOUT_START, list(spy.dates))
+                    dev_end, protocol.HOLDOUT_START, list(spy.dates), np.array([d.toordinal() for d in panel.dates]))
 
 
 def picks_from(scores: np.ndarray, p: Prepared, window: tuple[date, date], n: int) -> dict[date, list]:
-    mask = p.usable & np.isfinite(scores) & np.array([window[0] <= d <= window[1] for d in p.panel.dates])
+    mask = p.usable & np.isfinite(scores) & p.window(window[0], window[1])
     top = daily_top(scores, p.panel.dates, mask, n)
     out: dict[date, list] = {}
     for row in top:
@@ -147,7 +151,8 @@ def evaluate_variant(variant: protocol.Variant, dev_scores: np.ndarray, hold_sco
                      risk_limits: RiskLimits, chosen: dict | None = None) -> VariantResult:
     rule = ExitRule(variant.horizon, target=variant.target)
     base = CostModel()
-    first = min((d for d, s in zip(p.panel.dates, dev_scores) if np.isfinite(s)), default=p.dev_end)
+    finite = np.isfinite(dev_scores)
+    first = date.fromordinal(int(p.ordinals[finite].min())) if finite.any() else p.dev_end
     dev_window = (first, p.dev_end)
     dev_cal = [d for d in p.calendar if first <= d <= p.dev_end + timedelta(days=protocol.EMBARGO_DAYS - 1)]
     hold_cal = [d for d in p.calendar if d >= p.holdout_start]
@@ -227,8 +232,8 @@ def benchmarks(p: Prepared, risk_limits: RiskLimits, start: date) -> dict:
     random_scores = rng.random(len(p.panel.dates))
     for h in HORIZONS:
         v = protocol.Variant("RANDOM", h)
-        dev_scores = np.where(np.array([start <= d <= p.dev_end for d in p.panel.dates]), random_scores, np.nan)
-        hold_scores = np.where(np.array([d >= p.holdout_start for d in p.panel.dates]), random_scores, np.nan)
+        dev_scores = np.where(p.window(start, p.dev_end), random_scores, np.nan)
+        hold_scores = np.where(p.ordinals >= p.holdout_start.toordinal(), random_scores, np.nan)
         r = evaluate_variant(v, dev_scores, hold_scores, p, risk_limits)
         out[f"RANDOM {h}d development"] = r.dev
         out[f"RANDOM {h}d holdout"] = r.holdout
@@ -242,20 +247,26 @@ def run_all(inputs: Inputs, variants=None, risk_limits: RiskLimits | None = None
     progress(f"panel: {len(p.panel.dates)} rows, {int(np.sum(p.usable))} usable, {len(np.unique(p.panel.tickers))} tickers")
     results = []
     fitted_cache: dict = {}
+    spy_up_rows = None
     for v in variants:
         if v.strategy in ("EXISTING_TARGET10", "MODEL_A_DIRECTION", "MODEL_B_EXPECTED_RETURN", "MODEL_C_RISK_ADJUSTED"):
             key = (v.strategy, v.horizon)
             if key not in fitted_cache:
-                fitted_cache[key] = strategies.fitted_scores(v.strategy, p.panel, v.horizon, p.labels[v.horizon],
-                                                             p.usable, p.vol20, p.dev_end, p.holdout_start)
+                group = tuple(x.strategy for x in variants if x.horizon == v.horizon
+                              and strategies._fit_group(x.strategy) == strategies._fit_group(v.strategy))
+                many = strategies.fitted_scores_many(group, p.panel, v.horizon, p.labels[v.horizon], p.usable,
+                                                     p.vol20, p.dev_end, p.holdout_start)
+                for k, f in many.items():
+                    fitted_cache[(k, v.horizon)] = f
             f = fitted_cache[key]
             dev_scores, hold_scores, chosen = f.dev, f.holdout, f.chosen
         else:
-            spy_up = np.array([p.spy_up.get(d, False) for d in p.panel.dates])
-            s = strategies.rule_score(v.strategy, p.panel, spy_up, p.dollar_volume)
-            in_dev = np.array([d <= p.dev_end for d in p.panel.dates])
+            if spy_up_rows is None:
+                spy_up_rows = np.array([p.spy_up.get(d, False) for d in p.panel.dates])
+            s = strategies.rule_score(v.strategy, p.panel, spy_up_rows, p.dollar_volume)
+            in_dev = p.ordinals <= p.dev_end.toordinal()
             dev_scores, hold_scores, chosen = np.where(in_dev, s, np.nan), np.where(
-                np.array([d >= p.holdout_start for d in p.panel.dates]), s, np.nan), {}
+                p.ordinals >= p.holdout_start.toordinal(), s, np.nan), {}
         results.append(evaluate_variant(v, dev_scores, hold_scores, p, risk_limits, chosen))
         r = results[-1]
         progress(f"{v.name}: trades {r.dev.get('trade_trades', 0)}, mean/trade {r.dev.get('trade_expected_value', float('nan')):.4%}, "
