@@ -113,7 +113,12 @@ def write_dashboard(js: dict, ledger_path: Path, output: Path) -> None:
                   "status": book.status(r["id"])} for r in book.predictions()
                  if book.status(r["id"]) in ("OPEN", "FILLED")]
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(dashboard.render(js, book.summary(), open_rows, not book.verify()), encoding="utf-8")
+    research = output.parent
+    latest = lambda pattern: (json.loads(sorted(research.glob(pattern))[-1].read_text(encoding="utf-8"))
+                              if list(research.glob(pattern)) else None)
+    output.write_text(dashboard.render(js, book.summary(), open_rows, not book.verify(),
+                                       latest("after_open_hourly_*.json"), latest("holding_period_*.json")),
+                      encoding="utf-8")
     print(f"dashboard written: {output}")
 
 

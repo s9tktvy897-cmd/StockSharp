@@ -134,7 +134,62 @@ select(0);
 """
 
 
-def render(js: dict, ledger_summary: dict, open_predictions: list[dict], ledger_ok: bool) -> str:
+def _after_open_html(hourly: dict | None, holding: dict | None) -> str:
+    """Two exploratory sections: the day's high after the open (hourly bars) and the holding period."""
+    pct = lambda x, d=1: "–" if x is None else f"{x * 100:.{d}f}%".replace(".", ",")
+    out = ""
+    if hourly:
+        rows = {(r["condition"], r["value"]): r for r in hourly.get("results", [])}
+        allr = rows.get(("all", "all stock-days"))
+        if allr:
+            big = allr.get("peak_hour_share_if_peak_5", {})
+            hours = "".join(f"<tr><td>{html.escape(k)}</td><td></td><td>{pct(v)}</td><td>{pct(big.get(k))}</td></tr>"
+                            for k, v in allr["peak_hour_share"].items())
+            out += ("<section class=\"panel\"><h2>Wanneer valt de hoogste koers na de opening?</h2>"
+                    f"<p class=\"sub\">Uurkoersen {html.escape(hourly.get('period_from', ''))} tot nu, "
+                    + f"{hourly.get('stock_days', 0):,}".replace(",", ".")
+                    + f" aandeel-dagen. Verkennend; {hourly.get('trials', 0)} combinaties getoetst, "
+                    "geen enkele significant positief na correctie.</p>"
+                    + "<div class=\"scroll\"><table><thead><tr><th>Uur (New York)</th><th></th><th>Alle dagen</th>"
+                    "<th>Dagen met piek ≥ +5%</th></tr></thead><tbody>" + hours + "</tbody></table></div>")
+        picks = [("all", "all stock-days"), ("news before the open (8-K)", "earnings 8-K"), ("opening gap", "-10..-3%"),
+                 ("opening gap", "< -10%"), ("opening gap", "+10..+20%"), ("opening gap", "> +20%"),
+                 ("daily volatility (20d)", "> 8%")]
+        body = ""
+        for key in picks:
+            r = rows.get(key)
+            if not r:
+                continue
+            name, best = max(r["rules"].items(), key=lambda kv: kv[1]["mean_net"])
+            body += (f"<tr><td>{html.escape(key[1] if key[0] == 'all' else key[0] + ': ' + key[1])}</td><td></td>"
+                     f"<td>{pct(r['p_peak_5'])}</td><td>{pct(r['p_low_5'])}</td><td>{pct(r['median_peak'], 2)}</td>"
+                     f"<td>{pct(r['giveback_after_peak'], 2)}</td><td>{html.escape(name)}</td>"
+                     f"<td class=\"{'neg' if best['mean_net'] < 0 else 'pos'}\">{pct(best['mean_net'], 2)}</td></tr>")
+        out += ("<h3>Kans op +5% en −5% na de opening, en wat een vaste regel oplevert (na kosten)</h3>"
+                "<div class=\"scroll\"><table><thead><tr><th>Situatie</th><th></th><th>Piek ≥ +5%</th><th>Dal ≤ −5%</th>"
+                "<th>Mediane piek</th><th>Terugval tot slot</th><th>Beste regel</th><th>Netto/trade</th></tr></thead>"
+                f"<tbody>{body}</tbody></table></div></section>")
+    if holding:
+        body = ""
+        for name in ("all eligible stock-days (random) | development", "SPY | development",
+                     "momentum 12-1 top 10 per day | development", "earnings drift top 10 per day | development",
+                     "SPY | holdout"):
+            for h, d in holding.get(name, {}).items():
+                if h in ("1", "20", "120", "250") and d.get("n"):
+                    label = name.replace("all eligible stock-days (random)", "willekeurig aandeel").replace(
+                        " | development", "").replace(" | holdout", " (holdout)").replace(" top 10 per day", " top-10")
+                    body += (f"<tr><td>{html.escape(label)}, {h} dagen</td><td></td><td>{pct(d['mean'], 2)}</td>"
+                             f"<td>{pct(d['median'], 2)}</td><td>{pct(d['p_ge_5'])}</td><td>{pct(d['p_loss'])}</td></tr>")
+        out += ("<section class=\"panel\"><h2>Hoe lang aanhouden voor gemiddeld +5%?</h2>"
+                "<p class=\"sub\">Instap op de opening, uitstap op het slot na h handelsdagen, na kosten. Een hoog gemiddelde "
+                "met een negatieve mediaan betekent dat de typische trade verliest.</p>"
+                "<div class=\"scroll\"><table><thead><tr><th>Wat en hoe lang</th><th></th><th>Gemiddeld</th><th>Mediaan</th>"
+                f"<th>Kans ≥ +5%</th><th>Kans op verlies</th></tr></thead><tbody>{body}</tbody></table></div></section>")
+    return out
+
+
+def render(js: dict, ledger_summary: dict, open_predictions: list[dict], ledger_ok: bool,
+           hourly: dict | None = None, holding: dict | None = None) -> str:
     v = js["variants"]
     statuses = [r["status"] for r in v]
     verdict = ("PAPER TRADING CANDIDATE" if any(s.startswith("PAPER") for s in statuses) else
@@ -210,6 +265,7 @@ def render(js: dict, ledger_summary: dict, open_predictions: list[dict], ledger_
     <div class="scroll"><table><thead><tr><th>Benchmark</th><th></th><th>CAGR</th><th>Sharpe</th><th>Max. DD</th></tr></thead>
     <tbody>{bench_rows}</tbody></table></div>
   </section>
+  {_after_open_html(hourly, holding)}
   <section class="panel">
     <h2>Open voorspellingen in het register</h2>
     <div class="scroll"><table><thead><tr><th>Ticker</th><th>Strategie</th><th>Signaal</th><th>Horizon</th><th>Status</th></tr></thead>
