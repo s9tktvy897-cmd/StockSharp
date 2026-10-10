@@ -167,6 +167,10 @@ De "stock explosion"-module (`src/equity_research/shortterm/`, methode in
   rendement (na kosten) boven 0 ligt. Verloor de gebruikte rangschikking geld in de backtest, dan
   staat er een waarschuwing boven de kandidaten; noem die ook in de chat. Toon bij elke kans op +10%
   ook de kans op ≥10% daling (richtingstoets).
+- Eerste keus voor de kandidaten is het model dat het **netto rendement van de trade na kosten**
+  voorspelt (`shortterm/expected.py`) en alleen handelt bij een positieve verwachting, maar alleen
+  als die rangschikking in de backtest aantoonbaar winstgevend was. Dagen zonder trade zijn een
+  geldige uitkomst. Een minimumwinst per trade bestaat niet en wordt nooit beloofd.
 - Modelverbetering via hetzelfde walk-forward-protocol; het laatste testjaar niet gebruiken om te
   tunen. Vergelijk daarna met de voorspellingslog (`predictions/`, `shortterm evaluate`).
 - Nieuws: alleen officiële bronnen (SEC 8-K) of door de gebruiker gelicentieerde bronnen; het
