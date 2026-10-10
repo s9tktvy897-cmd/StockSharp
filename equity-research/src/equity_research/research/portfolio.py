@@ -124,6 +124,7 @@ class SimulationResult:
     traded_value: float
     data_ended: int = 0
     equity: np.ndarray = field(default_factory=lambda: np.array([]))
+    kill_switches: int = 0
 
     def summary(self) -> dict:
         perf = stats.performance(self.returns)
@@ -135,7 +136,8 @@ class SimulationResult:
                 "turnover": self.traded_value / mean_equity / years if years and mean_equity else float("nan"),
                 "avg_cost": float(np.mean([t.cost_entry + t.cost_exit for t in self.trades])) if self.trades else float("nan"),
                 "no_trade_days": self.no_trade_days, "signal_days": self.signal_days,
-                "partial_fills": sum(t.partial for t in self.trades), "data_ended": self.data_ended}
+                "partial_fills": sum(t.partial for t in self.trades), "data_ended": self.data_ended,
+                "kill_switches": self.kill_switches}
 
 
 def simulate(market: MarketData, picks: dict[date, list[tuple[str, float]]], calendar: list[date], rule: ExitRule,
@@ -146,7 +148,7 @@ def simulate(market: MarketData, picks: dict[date, list[tuple[str, float]]], cal
     cash, positions = capital, []
     state = PortfolioState(capital, 0.0, {}, market.sectors)
     pending: list[Order] = []
-    equity_prev, peak = capital, capital
+    equity_prev, peak = capital, capital  # peak: for the risk layer, reset when trading restarts
     out_dates, rets, exposure, equity_series = [], [], [], []
     trades: list[Trade] = []
     blocked, cancelled = Counter(), Counter()
@@ -234,6 +236,8 @@ def simulate(market: MarketData, picks: dict[date, list[tuple[str, float]]], cal
         exposure.append(invested / equity if equity > 0 else 0.0)
         equity_series.append(equity)
         equity_prev = equity
+        if k == state.blocked_until + 1 and state.kill_switches:
+            peak = equity  # restart after the cool-off: the drawdown limit is measured from here
         state.equity, state.invested, state.positions = equity, invested, values
         state.drawdown, state.last_return, state.day = equity / peak - 1, r, k
         risk.update(state)
@@ -263,4 +267,4 @@ def simulate(market: MarketData, picks: dict[date, list[tuple[str, float]]], cal
             no_trade += 1
 
     return SimulationResult(out_dates, np.array(rets), np.array(exposure), trades, blocked, cancelled, no_trade,
-                            signal_days, traded_value, data_ended, np.array(equity_series))
+                            signal_days, traded_value, data_ended, np.array(equity_series), state.kill_switches)

@@ -44,8 +44,10 @@ LINE_ITEMS: tuple[LineItem, ...] = (
     _d("eps_diluted", "EarningsPerShareDiluted", unit="USD/shares", share_basis="per_share"),
     _d("diluted_shares", "WeightedAverageNumberOfDilutedSharesOutstanding", unit="shares", share_basis="shares"),
     # Cash-flow statement
+    # "Depreciation" alone (without amortization) is the last resort: it understates D&A, which makes
+    # FCFF and EBITDA lower, i.e. conservative (MSFT reports only this concept).
     _d("depreciation_amortization", "DepreciationDepletionAndAmortization", "DepreciationAmortizationAndAccretionNet",
-       "DepreciationAndAmortization"),
+       "DepreciationAndAmortization", "Depreciation"),
     _d("stock_based_compensation", "ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"),
     _d("operating_cash_flow", "NetCashProvidedByUsedInOperatingActivities",
        "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"),

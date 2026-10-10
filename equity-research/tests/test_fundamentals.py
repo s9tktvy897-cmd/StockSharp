@@ -160,3 +160,22 @@ def test_prior_year_must_be_adjacent():
     m = analysis.yearly_metrics(build_annual(_facts(data)))
     assert FY[2023] not in m["roe"]
     assert "no prior fiscal year" in m["diluted_shares_change"][FY[2024]].missing_reason
+
+
+def test_dropped_debt_component_in_annual_statements():
+    from equity_research.data.sec_edgar import EdgarFact
+    from equity_research.fundamentals import analysis
+    from equity_research.fundamentals.statements import AnnualStatements
+
+    def fact(year, value):
+        return EdgarFact(value, "USD", "SEC EDGAR", "x", date(2026, 1, 1), None, date(year, 12, 31))
+    st = AnnualStatements("1", "SYN", None, {"commercial_paper": {date(2016, 12, 31): fact(2016, 5.0)}}, [])
+    long_ago = analysis._optional(st, "commercial_paper", date(2024, 12, 31))
+    assert long_ago.value == 0.0 and "assumption" in long_ago.note
+    recent = analysis._optional(st, "commercial_paper", date(2017, 12, 31))
+    assert recent.value is None  # reported a year earlier: missing, not zero
+    st.items["commercial_paper"][date(2023, 12, 31)] = fact(2023, 0.0)
+    nil = analysis._optional(st, "commercial_paper", date(2024, 12, 31))
+    assert nil.value == 0.0 and "last reported as 0" in nil.note
+    gap = analysis._optional(st, "commercial_paper", date(2020, 12, 31))
+    assert gap.value is None  # a gap between two reported years is missing, not zero

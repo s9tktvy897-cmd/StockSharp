@@ -54,6 +54,7 @@ class PortfolioState:
     last_return: float = 0.0
     blocked_until: int = -1                   # day index until which new orders are blocked
     day: int = 0
+    kill_switches: int = 0                    # times the drawdown limit stopped new orders
 
 
 @dataclass
@@ -67,13 +68,19 @@ class RiskManager:
         self.limits = limits or RiskLimits()
         self.correlation = correlation  # callable(ticker_a, ticker_b, signal_date) -> float | None
 
-    def update(self, state: PortfolioState) -> None:
-        """Called after each close: sets the block on new orders after a breach."""
+    def update(self, state: PortfolioState) -> str | None:
+        """Called after each close: sets the block on new orders after a breach. Returns
+        "drawdown" when the drawdown limit fires (the simulator then measures the drawdown again
+        from the restart after the cool-off, as a human review would restart the strategy)."""
         lim = self.limits
-        if state.drawdown <= lim.drawdown_limit:
-            state.blocked_until = max(state.blocked_until, state.day + lim.cooloff_days)
+        fired = None
+        if state.drawdown <= lim.drawdown_limit and state.day > state.blocked_until:
+            state.blocked_until = state.day + lim.cooloff_days
+            state.kill_switches += 1
+            fired = "drawdown"
         if state.last_return <= lim.daily_loss_limit:
             state.blocked_until = max(state.blocked_until, state.day + 1)
+        return fired
 
     def size(self, order: Order, equity: float, sleeve_value: float, n_orders: int) -> float:
         lim = self.limits

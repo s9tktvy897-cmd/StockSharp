@@ -1,7 +1,10 @@
 # equity-research (Python, equity-research/): tests on every change, and a daily short-term scan.
 # The scan only runs on a schedule from the default branch; it needs the repository secret
 # EQUITY_RESEARCH_USER_AGENT ("equity-research name@example.com", required by the SEC).
-# Reports and the prediction log are uploaded as an artifact; nothing is committed or traded.
+# Reports are uploaded as an artifact. The immutable prediction ledger (equity-research/ledger,
+# hash-chained JSON lines) is kept on the branch "paper-ledger": every run restores it, appends the
+# new predictions and their simulated fills/exits, checks that the old records are unchanged and
+# pushes it back. Nothing is traded and no broker is connected.
 name: equity-research
 
 on:
@@ -40,6 +43,8 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 330
+    permissions:
+      contents: write  # only to push the prediction ledger to the paper-ledger branch
     env:
       EQUITY_RESEARCH_USER_AGENT: ${{ secrets.EQUITY_RESEARCH_USER_AGENT }}
     steps:
@@ -54,16 +59,46 @@ jobs:
           path: equity-research/data/cache
           key: equity-research-cache-${{ github.run_id }}
           restore-keys: equity-research-cache-
+      - name: Restore the prediction ledger
+        run: |
+          if git ls-remote --exit-code origin paper-ledger > /dev/null; then
+            git fetch --depth=1 origin paper-ledger
+            git show FETCH_HEAD:ledger.jsonl > ledger/ledger.jsonl
+          fi
+          cp ledger/ledger.jsonl "$RUNNER_TEMP/ledger_before.jsonl"
+          python -m equity_research.ledger verify ledger/ledger.jsonl
       - name: Scan
         run: python -m equity_research.shortterm scan --yahoo --max-tickers "${{ github.event.inputs.max_tickers || '0' }}"
+      - name: Paper trades of validated strategies (or NO TRADE)
+        run: python -m equity_research.research signals
       - name: Show report
         run: cat reports/shortterm/scan_*.md
       - name: Check earlier predictions
         run: python -m equity_research.shortterm evaluate --yahoo --no-sec --max-tickers "${{ github.event.inputs.max_tickers || '0' }}" || true
+      - name: Save the prediction ledger (append-only)
+        if: github.ref == 'refs/heads/master'
+        run: |
+          python -m equity_research.ledger check-extension "$RUNNER_TEMP/ledger_before.jsonl" ledger/ledger.jsonl
+          python -m equity_research.ledger summary ledger/ledger.jsonl
+          git config --global user.name "equity-research ledger"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          store="$RUNNER_TEMP/ledger-store"
+          if git ls-remote --exit-code origin paper-ledger > /dev/null; then
+            git fetch origin paper-ledger:paper-ledger
+            git worktree add "$store" paper-ledger
+          else
+            git worktree add --orphan -b paper-ledger "$store"
+          fi
+          cp ledger/ledger.jsonl "$store/ledger.jsonl"
+          cd "$store"
+          git add ledger.jsonl
+          git commit -m "ledger: run ${{ github.run_id }}" || echo "no new records"
+          git push origin paper-ledger
       - uses: actions/upload-artifact@v4
         with:
           name: shortterm-${{ github.run_id }}
           path: |
             equity-research/reports/shortterm/
             equity-research/predictions/
+            equity-research/ledger/
           if-no-files-found: warn

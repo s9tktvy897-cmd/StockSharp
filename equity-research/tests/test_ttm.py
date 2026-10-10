@@ -78,3 +78,25 @@ def test_required_item_missing_on_latest_date_is_not_zero():
     facts = _facts()
     balance = latest_balance(facts, build_annual(facts))
     assert balance.get("equity").value is None
+
+
+def test_component_dropped_from_the_statements_long_ago_is_an_explicit_zero_assumption():
+    import copy
+    facts = copy.deepcopy(FACTS)
+    facts["us-gaap"]["CommercialPaper"]["units"]["USD"] = [
+        _row(None, "2021-12-31", 20, "K21", 2021, "FY", "10-K", "2022-02-14")]  # last reported 3.5 years earlier
+    f = CompanyFacts("0000000042", "SYNTHETIC TEST CO", facts, date(2026, 10, 9))
+    balance = latest_balance(f, build_annual(f))
+    cp = balance.get("commercial_paper")
+    assert cp.value == 0.0
+    assert "assumption" in cp.note and "2021-12-31" in cp.note
+
+
+def test_component_last_reported_as_zero_counts_as_zero():
+    import copy
+    facts = copy.deepcopy(FACTS)
+    facts["us-gaap"]["CommercialPaper"]["units"]["USD"] = [
+        _row(None, "2024-12-31", 0, "K24", 2024, "FY", "10-K", "2025-02-14")]  # recent, and nil
+    f = CompanyFacts("0000000042", "SYNTHETIC TEST CO", facts, date(2026, 10, 9))
+    cp = latest_balance(f, build_annual(f)).get("commercial_paper")
+    assert cp.value == 0.0 and "last reported as 0" in cp.note

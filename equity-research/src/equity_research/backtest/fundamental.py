@@ -54,10 +54,19 @@ def forward_return(bars: Bars, start: date, horizon_days: int) -> float | None:
 
 
 def _market_value(bars: Bars | None, day: date, shares) -> float | None:
-    if bars is None or shares is None:
+    """Price actually traded on ``day`` (not adjusted for later splits) x the share count reported
+    as of then; an adjusted price would understate the value after any later split."""
+    if bars is None or shares is None or shares.value is None:
         return None
     before = [i for i, d in enumerate(bars.dates) if d <= day]
-    return float(bars.close[before[-1]] * shares.value) if before else None
+    return float(bars.traded_close[before[-1]] * shares.value) if before else None
+
+
+def _ratio(numerator, denominator: float | None) -> float | None:
+    value = getattr(numerator, "value", numerator)
+    if value is None or denominator is None or not denominator > 0:
+        return None
+    return float(value) / denominator
 
 
 def observe(ticker: str, sic: str, facts: CompanyFacts, bars: Bars | None, rebalance: date,
@@ -83,6 +92,12 @@ def observe(ticker: str, sic: str, facts: CompanyFacts, bars: Bars | None, rebal
     fcf = [metrics["fcf"][y].value for y in st.fiscal_years[-6:] if y in metrics["fcf"]]
     rising = sum(b is not None and a is not None and b > 0 and b > a for a, b in zip(fcf, fcf[1:]))
     signals["fcf_rising_years"] = rising if len(fcf) == 6 else None
+    # simple valuation factors at the rebalance date (market value from the traded price then)
+    mcap = _market_value(bars, rebalance, st.get("diluted_shares", fy))
+    signals["market_cap"] = mcap
+    signals["earnings_yield"] = _ratio(st.get("net_income", fy), mcap)
+    signals["fcf_yield"] = _ratio(metrics["fcf"].get(fy), mcap)
+    signals["book_to_market"] = _ratio(st.get("equity", fy), mcap)
     return Observation(ticker, rebalance, fy, signals, forward_return(bars, rebalance, horizon_days) if bars else None)
 
 
@@ -163,3 +178,49 @@ def information_coefficients(observations: list[Observation], signal: str) -> di
             by_date[o.rebalance].append((o.signals[signal], o.forward_return))
     return {d: spearman([a for a, _ in rows], [b for _, b in rows]) for d, rows in sorted(by_date.items())
             if len(rows) >= 10}
+
+
+FACTORS = ("earnings_yield", "fcf_yield", "book_to_market", "piotroski", "revenue_cagr_5y")
+
+
+def ic_summary(observations: list[Observation], signal: str) -> dict:
+    """Mean rank correlation per date with its t statistic over dates (dates are the independent units)."""
+    ic = [v for v in information_coefficients(observations, signal).values() if np.isfinite(v)]
+    if not ic:
+        return {"dates": 0}
+    sd = float(np.std(ic, ddof=1)) if len(ic) > 1 else float("nan")
+    return {"dates": len(ic), "mean_ic": float(np.mean(ic)),
+            "t_stat": float(np.mean(ic)) / (sd / math.sqrt(len(ic))) if sd and sd > 0 else float("nan")}
+
+
+def _composite(observations: list[Observation], signals: tuple[str, ...]) -> dict[int, float]:
+    """Average cross-sectional rank (0..1) of the given signals per date; rows missing any signal are left out."""
+    by_date = defaultdict(list)
+    for k, o in enumerate(observations):
+        if all(o.signals.get(s) is not None for s in signals):
+            by_date[o.rebalance].append(k)
+    out = {}
+    for rows in by_date.values():
+        if len(rows) < 10:
+            continue
+        ranks = np.zeros(len(rows))
+        for s in signals:
+            ranks += _ranks([observations[k].signals[s] for k in rows]) / len(rows)
+        for k, r in zip(rows, ranks / len(signals)):
+            out[k] = float(r)
+    return out
+
+
+def added_value(observations: list[Observation], base: tuple[str, ...] = ("earnings_yield", "fcf_yield", "book_to_market"),
+                extra: str = "piotroski") -> dict:
+    """Does ``extra`` add to a simple value composite? IC of the value composite vs value + extra
+    on the same rows, per date."""
+    both = _composite(observations, base + (extra,))
+    value = _composite(observations, base)
+    rows = [k for k in both if k in value and observations[k].forward_return is not None]
+    out = {}
+    for name, comp in (("value", value), ("value_plus_" + extra, both)):
+        tagged = [Observation(observations[k].ticker, observations[k].rebalance, observations[k].fiscal_year,
+                              {"score": comp[k]}, observations[k].forward_return) for k in rows]
+        out[name] = ic_summary(tagged, "score")
+    return out

@@ -155,3 +155,23 @@ def test_no_trade_when_there_are_no_picks():
     m = MarketData({"A": a})
     res = portfolio.simulate(m, {}, list(a.dates), ExitRule(horizon=1), NO_COST, RiskManager(LOOSE))
     assert res.trades == [] and np.allclose(res.returns, 0) and res.no_trade_days == 30
+
+
+def test_kill_switch_fires_once_per_breach_and_trading_restarts():
+    # A stock that falls 3% every day: the strategy keeps buying it and keeps losing.
+    n = 200
+    closes = 100 * 0.97 ** np.arange(n)
+    a = make_bars("A", closes, opens=closes / 0.97, volumes=np.full(n, 1e9))  # falls during each day
+    m = MarketData({"A": a})
+    days = list(a.dates)
+    picks = {d: [("A", 1.0)] for d in days[25:]}
+    limits = RiskLimits(max_position=1.0, risk_per_position=10.0, max_spread=1.0, max_sector=1.0,
+                        min_dollar_volume=0, min_price=0, daily_loss_limit=-0.99, drawdown_limit=-0.20,
+                        cooloff_days=10, max_participation=1.0)
+    res = portfolio.simulate(m, picks, days, ExitRule(horizon=1), NO_COST, RiskManager(limits), top_n=1,
+                             capital=100_000)
+    assert res.kill_switches >= 2                       # it restarted after the cool-off and fired again
+    entries = sorted({t.entry_date for t in res.trades})
+    assert entries[-1] > days[150]                      # trading resumed late in the period
+    from equity_research.research import stats
+    assert stats.max_drawdown(res.returns) < -0.30      # the real drawdown is reported, not capped at -20%

@@ -168,6 +168,13 @@ def run(args: argparse.Namespace, sources: Sources | None = None) -> ValuationRu
                             "use a dividend or excess-return model (not built yet).")
     facts = sources.edgar.company_facts(profile.cik)
     st = build_annual(facts, as_of=args.as_of)
+    if not st.fiscal_years:
+        raise NotApplicable(
+            f"{profile.name} (CIK {profile.cik}) has no annual XBRL statements"
+            + (f" as of {args.as_of}" if args.as_of else "")
+            + ". Often a new registrant after a reorganization (for example a new holding company): the history "
+              "is filed under the predecessor's CIK. Nothing is filled in; analyse the predecessor's filings or wait "
+              "for the first 10-K.")
     metrics = analysis.yearly_metrics(st)
 
     flows = {item: ttm(facts, item, as_of=args.as_of) for item in
