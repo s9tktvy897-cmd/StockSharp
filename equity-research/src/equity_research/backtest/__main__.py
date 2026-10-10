@@ -65,8 +65,22 @@ def render(observations: list[fb.Observation], rebalances: list[date], horizon: 
     L += ["| Screen | n | Gem. overrendement | Mediaan | Beter dan universum (95%-BI) | t | n rest | Gem. rest |",
           "|---|---|---|---|---|---|---|---|"] + ["| " + " | ".join(r) + " |" for r in rows] + [""]
     L += [f"- {v}" for v in verdicts] + [""]
+    L += ["## 3. Voorspellende waarde per factor (rangcorrelatie met het rendement, per datum)", "",
+          "| Factor | Data | Gem. IC | t (over data) |", "|---|---|---|---|"]
+    for f in fb.FACTORS:
+        s = fb.ic_summary(observations, f)
+        L.append(f"| {f} | {s.get('dates', 0)} | {nl(s.get('mean_ic'), 3) if s.get('dates') else MISSING} | "
+                 f"{nl(s.get('t_stat'), 2) if s.get('dates') else MISSING} |")
+    av = fb.added_value(observations)
+    L += ["", "**Voegt de Piotroski-score iets toe aan simpele waarderingsfactoren?** (zelfde aandelen en data)", "",
+          "| Samenstelling | Data | Gem. IC | t |", "|---|---|---|---|"]
+    for name, s in av.items():
+        L.append(f"| {name} | {s.get('dates', 0)} | {nl(s.get('mean_ic'), 3) if s.get('dates') else MISSING} | "
+                 f"{nl(s.get('t_stat'), 2) if s.get('dates') else MISSING} |")
+    L += ["", "Een |t| boven 2 is een aanwijzing, geen bewijs: er zijn meerdere factoren getest en het aantal "
+          "herbalanceringsdata is klein. Geen transactiekosten.", ""]
     ic = fb.information_coefficients(observations, "piotroski")
-    L += ["## 3. Rangcorrelatie Piotroski-score en rendement (per datum, ≥ 10 aandelen)", ""]
+    L += ["## 4. Rangcorrelatie Piotroski-score en rendement (per datum, ≥ 10 aandelen)", ""]
     if ic:
         values = [v for v in ic.values() if np.isfinite(v)]
         L += ["| Datum | Spearman |", "|---|---|"] + [f"| {d} | {nl(v, 3)} |" for d, v in ic.items()] + [""]

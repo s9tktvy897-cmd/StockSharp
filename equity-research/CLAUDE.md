@@ -171,6 +171,16 @@ De "stock explosion"-module (`src/equity_research/shortterm/`, methode in
   voorspelt (`shortterm/expected.py`) en alleen handelt bij een positieve verwachting, maar alleen
   als die rangschikking in de backtest aantoonbaar winstgevend was. Dagen zonder trade zijn een
   geldige uitkomst. Een minimumwinst per trade bestaat niet en wordt nooit beloofd.
+- **Onderzoeksprotocol** (`docs/RESEARCH_PROTOCOL.md`, `src/equity_research/research/`): een strategie wordt
+  alleen beoordeeld via `python -m equity_research.research run` -- vooraf vastgelegde criteria, Holm-correctie
+  over alle varianten, eenmalige holdout vanaf 2025-10-01, kostenstress, risicolaag. Status per variant:
+  REJECTED / RESEARCH ONLY / PAPER TRADING CANDIDATE / PAPER TRADING VALIDATED; zonder kandidaat is het oordeel
+  **NO PROVEN EDGE** en wordt er niets (paper-)gehandeld. Een drempel wijzigen na het zien van resultaten mag
+  niet; een wijziging vooraf komt met reden in de sectie "Amendments" van het protocol.
+- **Voorspellingsregister** (`ledger/ledger.jsonl`, hash-keten, branch `paper-ledger` op GitHub): nooit een
+  regel wijzigen of verwijderen; statuswijzigingen zijn nieuwe regels. `python -m equity_research.ledger verify`.
+  Paper trading alleen voor strategieën met status PAPER TRADING CANDIDATE; backtest, holdout, paper en live
+  altijd gescheiden rapporteren. Live trading is niet geautoriseerd.
 - Modelverbetering via hetzelfde walk-forward-protocol; het laatste testjaar niet gebruiken om te
   tunen. Vergelijk daarna met de voorspellingslog (`predictions/`, `shortterm evaluate`).
 - Nieuws: alleen officiële bronnen (SEC 8-K) of door de gebruiker gelicentieerde bronnen; het

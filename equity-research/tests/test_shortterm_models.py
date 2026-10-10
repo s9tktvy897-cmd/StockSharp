@@ -74,3 +74,18 @@ def test_panel_keeps_only_tradable_rows_as_float32():
     panel = build_panel(universe, None, Config())
     assert "PENNY" not in set(panel.tickers)
     assert panel.X.dtype == np.float32 and panel.eligible.all()
+
+
+def test_price_filter_uses_the_price_traded_that_day_not_the_split_adjusted_one():
+    import dataclasses
+    from equity_research.shortterm.config import Config
+    from equity_research.shortterm.dataset import build_panel
+    from shortterm_fakes import planted_universe
+    universe = planted_universe(n_tickers=2, n_days=200, seed=3)
+    # T00 later did a 20:1 split: adjusted prices look like $1, the real price was 20x higher.
+    b = universe["T00"]
+    universe["T00"] = dataclasses.replace(b, open=b.open / 20, high=b.high / 20, low=b.low / 20, close=b.close / 20,
+                                          volume=b.volume * 20, raw_close=b.close.copy())
+    panel = build_panel(universe, None, Config())
+    assert "T00" in set(panel.tickers[panel.eligible])
+    assert np.allclose(panel.price[panel.tickers == "T00"], b.close[panel.rows[panel.tickers == "T00"]])

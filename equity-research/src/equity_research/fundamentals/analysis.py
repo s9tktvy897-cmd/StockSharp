@@ -30,12 +30,23 @@ def derive(name: str, unit: str, formula: str, year: date | None, fn: Callable[.
     return DerivedValue(name, value, unit, formula, present, year, None, note)
 
 
+DROPPED_AFTER_DAYS = 730  # same rule as fundamentals.ttm.latest_balance
+
+
 def _optional(st: AnnualStatements, item: str, year: date) -> DerivedValue | EdgarFact:
     fact = st.get(item, year)
     if fact is not None:
         return fact
     if st.items.get(item):
         reported = sorted(st.items[item])
+        before = [y for y in reported if y < year]
+        if before and st.items[item][before[-1]].value == 0:
+            return DerivedValue(item, 0.0, "USD", f"{item} last reported as 0 for {before[-1]}", (), year, None,
+                                f"{item} last reported as 0 for {before[-1]}, not reported for {year}")
+        if before and not [y for y in reported if y > year] and (year - before[-1]).days > DROPPED_AFTER_DAYS:
+            return DerivedValue(item, 0.0, "USD", f"{item} last reported {before[-1]}", (), year, None,
+                                f"{item} last reported for {before[-1]}, not since: taken as 0 (assumption: line "
+                                "dropped because it became nil)")
         return DerivedValue(item, None, "USD", item, (), year,
                             f"{item} reported for {reported[0]}..{reported[-1]} but not for {year}")
     return DerivedValue(item, 0.0, "USD", f"{item} never reported", (), year, None, f"{item} never reported, taken as 0")

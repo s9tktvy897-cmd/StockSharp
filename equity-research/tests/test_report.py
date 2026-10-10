@@ -67,3 +67,20 @@ def test_write_report_uses_ticker_and_date(tmp_path, synthetic_run):
     path = write_report("# x\n", "TSTX", date(2026, 10, 9), tmp_path)
     assert path == tmp_path / "TSTX_2026-10-09.md"
     assert path.read_text() == "# x\n"
+
+
+def test_company_without_annual_statements_is_refused_with_a_reason(tmp_path):
+    """A new registrant (e.g. a holding company after a reorganization) has no XBRL history yet."""
+    from equity_research.valuation.run import NotApplicable
+    transport = FakeTransport({
+        TICKERS_URL: as_json(SYNTHETIC_TICKERS),
+        SUBMISSIONS_URL.format(cik=SYNTHETIC_CIK): as_json(SYNTHETIC_SUBMISSIONS),
+        COMPANY_FACTS_URL.format(cik=SYNTHETIC_CIK): (200, json.dumps(
+            {"cik": 42, "entityName": "SYNTHETIC TEST CO", "facts": {}}).encode()),
+    })
+    client, cache = make_client(transport), make_cache(tmp_path)
+    sources = Sources(SecEdgar(client, cache), Fred(client, cache), Stooq(client, cache), Damodaran(client, cache))
+    parser = argparse.ArgumentParser()
+    add_market_arguments(parser)
+    with pytest.raises(NotApplicable, match="no annual XBRL statements"):
+        run(parser.parse_args(["TSTX"]), sources)

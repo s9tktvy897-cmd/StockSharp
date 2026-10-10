@@ -70,10 +70,15 @@ def _instants(facts: CompanyFacts, concept: str, unit: str, taxonomy: str, as_of
             + facts.quarterly(concept, unit=unit, taxonomy=taxonomy, as_of=as_of))
 
 
+DROPPED_AFTER_DAYS = 730
+
+
 def latest_balance(facts: CompanyFacts, st: AnnualStatements, as_of: date | None = None) -> LatestBalance:
     """Balance-sheet items at the newest date with reported total assets (10-K or 10-Q). An item
     absent on that date is missing, except an optional component (debt part, securities, minority
-    interest) that no 10-K ever reports, which counts as 0 with a note."""
+    interest) that no 10-K ever reports, which counts as 0 with a note, or one last reported more
+    than ``DROPPED_AFTER_DAYS`` before that date (dropped from the statements, typically because it
+    became nil): 0 as a labelled assumption naming the last reported date."""
     assets = _instants(facts, "Assets", "USD", "us-gaap", as_of)
     if not assets:
         raise ValueError("no total assets reported")
@@ -87,8 +92,23 @@ def latest_balance(facts: CompanyFacts, st: AnnualStatements, as_of: date | None
             if on_date:
                 found = max(on_date, key=lambda f: f.filed)
                 break
+        last = max((f.period_end for concept in line.concepts
+                    for f in _instants(facts, concept, line.unit, line.taxonomy, as_of)), default=None)
+        latest_value = None
+        if last is not None:
+            latest_value = max((f for concept in line.concepts for f in _instants(facts, concept, line.unit,
+                                                                                 line.taxonomy, as_of)
+                                if f.period_end == last), key=lambda f: f.filed).value
         if found is not None:
             items[line.name] = found
+        elif line.name in OPTIONAL_ITEMS and latest_value == 0:
+            items[line.name] = DerivedValue(line.name, 0.0, line.unit, f"{line.name} last reported as 0 on {last}", (),
+                                            when, None, f"{line.name} last reported as 0 on {last}, not reported since")
+        elif line.name in OPTIONAL_ITEMS and last is not None and (when - last).days > DROPPED_AFTER_DAYS:
+            items[line.name] = DerivedValue(
+                line.name, 0.0, line.unit, f"{line.name} last reported {last}", (), when, None,
+                f"{line.name} last reported {last}, not in any filing since: taken as 0 (assumption: line "
+                "dropped because it became nil; check the latest 10-K)")
         elif line.name not in OPTIONAL_ITEMS or st.items.get(line.name):
             items[line.name] = DerivedValue(line.name, None, line.unit, line.name, (), when,
                                             f"{line.name} not reported on {when}")

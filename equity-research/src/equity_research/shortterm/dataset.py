@@ -49,7 +49,7 @@ def build_panel(universe: dict[str, Bars], filings: dict[str, list[Filing]] | No
         keep &= np.isfinite(f["rvol"]) & np.isfinite(f["dollar_volume_20"])
         # Only tradable rows enter the panel (keeps a full-market panel small enough for memory).
         with np.errstate(invalid="ignore"):
-            keep &= (bars.close >= config.min_price) & (f["dollar_volume_20"] >= config.min_dollar_volume)
+            keep &= (bars.traded_close >= config.min_price) & (f["dollar_volume_20"] >= config.min_dollar_volume)
         idx = np.where(keep)[0]
         blocks.append((ticker, bars, f, out, idx))
     if not blocks:
@@ -64,7 +64,7 @@ def build_panel(universe: dict[str, Bars], filings: dict[str, list[Filing]] | No
     dates = np.concatenate([bars.dates[idx] for _, bars, _, _, idx in blocks])
     tickers = np.concatenate([np.full(len(idx), t, dtype=object) for t, _, _, _, idx in blocks])
     rows = np.concatenate([idx for *_, idx in blocks])
-    price = np.concatenate([bars.close[idx] for _, bars, _, _, idx in blocks])
+    price = np.concatenate([bars.traded_close[idx] for _, bars, _, _, idx in blocks])
     dollar = np.concatenate([f["dollar_volume_20"][idx] for _, _, f, _, idx in blocks])
     outcomes = {h: {k: np.concatenate([out[h][k][idx] for _, _, _, out, idx in blocks]) for k in blocks[0][3][h]}
                 for h in config.horizons}

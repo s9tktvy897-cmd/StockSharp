@@ -75,3 +75,36 @@ def test_render_without_and_with_returns():
            for i in range(90)]
     text = render(obs, [date(2020, 4, 30)], 365, "90", [], "test")
     assert "Piotroski >= 7" in text and not re.search(r"\bNone\b|\bnan\b", text)
+
+
+def test_market_value_uses_the_price_traded_then_not_the_split_adjusted_one():
+    import dataclasses
+    bars = make_bars("SYN", np.full(700, 5.0), start=date(2023, 1, 2))
+    traded = dataclasses.replace(bars, raw_close=np.full(700, 50.0))  # a later 10:1 split
+    o = fb.observe("SYN", "3571", _facts(), traded, date(2025, 4, 30))
+    shares = 100.0  # diluted shares are not needed here: compare against the same observation at price 50
+    plain = fb.observe("SYN", "3571", _facts(), dataclasses.replace(bars, close=np.full(700, 50.0)), date(2025, 4, 30))
+    assert o.signals["earnings_yield"] == pytest.approx(plain.signals["earnings_yield"])
+    assert o.signals["altman_zone"] == plain.signals["altman_zone"]
+
+
+def test_value_signals_are_none_not_zero_when_inputs_are_missing():
+    o = fb.observe("SYN", "3571", _facts(), None, date(2025, 4, 30))
+    assert o.signals["earnings_yield"] is None and o.signals["book_to_market"] is None
+    bars = make_bars("SYN", np.full(700, 10.0), start=date(2023, 1, 2))
+    o = fb.observe("SYN", "3571", _facts(), bars, date(2025, 4, 30))
+    assert o.signals["earnings_yield"] is not None and o.signals["earnings_yield"] != 0
+
+
+def test_ic_summary_and_added_value_hand_checked():
+    obs = []
+    for y in (2020, 2021, 2022):
+        for k in range(12):
+            obs.append(fb.Observation(f"T{k}", date(y, 4, 30), date(y - 1, 12, 31),
+                                      {"earnings_yield": k, "fcf_yield": k, "book_to_market": k, "piotroski": k % 3},
+                                      float(k)))
+    s = fb.ic_summary(obs, "earnings_yield")
+    assert s["dates"] == 3 and s["mean_ic"] == pytest.approx(1.0)
+    av = fb.added_value(obs)
+    assert av["value"]["mean_ic"] == pytest.approx(1.0)
+    assert av["value_plus_piotroski"]["mean_ic"] < 1.0  # adding an unrelated score dilutes a perfect ranking

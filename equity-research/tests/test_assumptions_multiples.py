@@ -60,3 +60,10 @@ def test_multiple_with_non_positive_denominator_is_none():
     m = multiples.market_multiples(price=50, shares=10, debt=0, cash=0, investments=0, minority_interest=0,
                                    revenue=1000, ebit=-5, net_income=-5, fcf=10)
     assert m["ev_ebit"] is None and m["pe"] is None
+
+
+def test_multiples_with_missing_inputs_are_none_not_a_crash():
+    from equity_research.valuation import multiples
+    m = multiples.market_multiples(10, 100, 0, 0, 0, 0, None, 50, None, None)
+    assert m["ev_sales"] is None and m["pe"] is None and m["p_fcf"] is None and m["fcf_yield"] is None
+    assert m["ev_ebit"] == 1000 / 50

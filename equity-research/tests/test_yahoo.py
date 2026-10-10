@@ -46,7 +46,7 @@ def test_bars_for_many_tickers_in_chunks_and_missing_ones(tmp_path):
     assert sorted(bars) == ["AAA", "BBB"] and len(fake.calls) == 2  # chunks of 2
     assert bars["AAA"].close.tolist() == [10, 11, 12] and "secondary" in bars["AAA"].source
     assert any("ZZZZ" in m for m in missing)
-    assert fake.calls[0][1]["auto_adjust"] is True
+    assert fake.calls[0][1]["auto_adjust"] is False
 
 
 def test_cache_is_reused_then_extended_incrementally(tmp_path):
@@ -91,3 +91,41 @@ def test_longer_history_request_refetches_a_short_cache(tmp_path):
     fake = FakeDownload(lambda s, k: frame({t: [9, 10, 11] for t in s}))
     yahoo.YahooPrices(tmp_path, download=fake, years=12, sleep=lambda s: None).bars(["AAA"])
     assert fake.calls and fake.calls[0][1]["period"] == "12y"
+
+
+def split_frame():
+    """SYNTHETIC yfinance layout with auto_adjust=False and actions=True: a 2:1 split on day 3 and a
+    dividend. Close is split-adjusted (as Yahoo serves it), Adj Close also dividend-adjusted."""
+    days = pd.bdate_range("2026-10-01", periods=4)
+    close = np.array([50.0, 51.0, 52.0, 53.0])  # already split-adjusted: real prices 100, 102, then 52, 53
+    adj = close * np.array([0.98, 0.98, 1.0, 1.0])
+    cols = {("AAA", "Open"): close, ("AAA", "High"): close * 1.01, ("AAA", "Low"): close * 0.99,
+            ("AAA", "Close"): close, ("AAA", "Adj Close"): adj, ("AAA", "Volume"): np.full(4, 1000.0),
+            ("AAA", "Dividends"): np.array([0, 0, 1.0, 0]), ("AAA", "Stock Splits"): np.array([0, 0, 2.0, 0])}
+    return pd.DataFrame(cols, index=days)
+
+
+def test_real_price_is_rebuilt_from_splits_and_prices_are_total_return_adjusted(tmp_path):
+    fake = FakeDownload(lambda s, k: split_frame())
+    bars, _ = _prices(tmp_path, fake).bars(["AAA"])
+    b = bars["AAA"]
+    assert fake.calls[0][1]["auto_adjust"] is False and fake.calls[0][1]["actions"] is True
+    assert b.raw_close.tolist() == pytest.approx([100.0, 102.0, 52.0, 53.0])  # price actually traded that day
+    assert b.close.tolist() == pytest.approx([49.0, 49.98, 52.0, 53.0])       # split- and dividend-adjusted
+    assert b.open[0] == pytest.approx(49.0)
+    cached, _ = _prices(tmp_path, FakeDownload(lambda s, k: None))._load("AAA")
+    assert cached.raw_close.tolist() == pytest.approx([100.0, 102.0, 52.0, 53.0])
+
+
+def test_cache_without_real_prices_is_refetched(tmp_path):
+    old = yahoo.YahooPrices(tmp_path, download=FakeDownload(lambda s, k: frame({t: [10, 11] for t in s})),
+                            sleep=lambda s: None)
+    old.bars(["AAA"])
+    meta = tmp_path / "yahoo" / "AAA.csv.json"
+    import json
+    info = json.loads(meta.read_text())
+    info.pop("format", None)
+    meta.write_text(json.dumps(info))
+    fake = FakeDownload(lambda s, k: split_frame())
+    _prices(tmp_path, fake).bars(["AAA"])
+    assert fake.calls and "period" in fake.calls[0][1]

@@ -166,7 +166,8 @@ def next_weekday(day: date) -> date:
 
 
 FEATURES = ("cat_overnight_any", "cat_overnight_earnings", "cat_overnight_deal", "cat_overnight_press",
-            "cat_overnight_negative", "cat_day_any", "cat_day_earnings", "cat_recent_any", "cat_recent_negative")
+            "cat_overnight_negative", "cat_day_any", "cat_day_earnings", "cat_recent_any", "cat_recent_negative",
+            "cat_reaction_earnings")
 
 
 def features(bars: Bars, filings: list[Filing], last_decision: datetime | None = None) -> dict[str, np.ndarray]:
@@ -190,6 +191,11 @@ def features(bars: Bars, filings: list[Filing], last_decision: datetime | None =
                 key = f"cat_{when}_{name}"
                 if key in out and (group is None or codes & group):
                     out[key][i] = 1
+        if codes & EARNINGS:
+            # earnings released after the previous close and up to this close: today's bar is the reaction
+            k = int(np.searchsorted(closes, t, side="left"))
+            if k < n and (k > 0 or t > closes[0] - 86400):
+                out["cat_reaction_earnings"][k] = 1
         lo = int(np.searchsorted(decisions, t, side="left"))
         hi = int(np.searchsorted(decisions, t + RECENT_DAYS * 86400, side="left"))
         for row in range(lo, min(hi, n)):

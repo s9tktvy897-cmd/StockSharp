@@ -10,7 +10,8 @@ from numpy.lib.stride_tricks import sliding_window_view
 from equity_research.shortterm.bars import Bars
 
 FEATURES = ("ret_1d", "ret_5d", "ret_20d", "gap", "rvol", "volume_trend", "atr_pct", "vol_ratio", "breakout_20",
-            "dist_52w_high", "close_location", "log_price", "log_dollar_volume")
+            "dist_52w_high", "close_location", "log_price", "log_dollar_volume", "ret_60d", "mom_12_1", "ma50_dist",
+            "ma200_dist", "vol_20", "vol_ratio_20_120")
 
 
 def shift(x: np.ndarray, k: int) -> np.ndarray:
@@ -57,6 +58,12 @@ def compute(bars: Bars) -> dict[str, np.ndarray]:
             "close_location": np.where(h > l, (c - l) / (h - l), 0.5),
             "log_price": np.log(c),
             "log_dollar_volume": np.log(dollar),
+            "ret_60d": c / shift(c, 60) - 1,
+            "mom_12_1": shift(c, 21) / shift(c, 252) - 1,  # 12-month momentum without the last month
+            "ma50_dist": c / rolling(c, 50, np.mean) - 1,
+            "ma200_dist": c / rolling(c, 200, np.mean) - 1,
+            "vol_20": rolling(ret, 20, np.std),
+            "vol_ratio_20_120": rolling(ret, 20, np.std) / rolling(ret, 120, np.std),
         }
     f["dollar_volume_20"] = dollar  # liquidity filter (not a model input)
     return f

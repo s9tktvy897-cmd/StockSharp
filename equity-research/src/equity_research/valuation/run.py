@@ -168,6 +168,13 @@ def run(args: argparse.Namespace, sources: Sources | None = None) -> ValuationRu
                             "use a dividend or excess-return model (not built yet).")
     facts = sources.edgar.company_facts(profile.cik)
     st = build_annual(facts, as_of=args.as_of)
+    if not st.fiscal_years:
+        raise NotApplicable(
+            f"{profile.name} (CIK {profile.cik}) has no annual XBRL statements"
+            + (f" as of {args.as_of}" if args.as_of else "")
+            + ". Often a new registrant after a reorganization (for example a new holding company): the history "
+              "is filed under the predecessor's CIK. Nothing is filled in; analyse the predecessor's filings or wait "
+              "for the first 10-K.")
     metrics = analysis.yearly_metrics(st)
 
     flows = {item: ttm(facts, item, as_of=args.as_of) for item in
@@ -288,7 +295,9 @@ def run(args: argparse.Namespace, sources: Sources | None = None) -> ValuationRu
         out.multiples = multiples.market_multiples(
             price.value, outstanding.value, debt, out.bridge.cash, out.bridge.investments,
             out.bridge.minority_interest, flows["revenue"].value, flows["operating_income"].value,
-            flows["net_income"].value, flows["operating_cash_flow"].value - flows["capex"].value)
+            flows["net_income"].value,
+            None if flows["operating_cash_flow"].value is None or flows["capex"].value is None
+            else flows["operating_cash_flow"].value - flows["capex"].value)
     if rf and g > rf.value:
         out.warnings.append("terminal growth exceeds the risk-free rate")
     return out

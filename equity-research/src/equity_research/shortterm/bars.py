@@ -27,6 +27,9 @@ class Bars:
     close: np.ndarray
     volume: np.ndarray
     source: str
+    # Price actually traded that day (not adjusted for later splits); None when the source only has
+    # adjusted prices. Filters such as "price >= $2" must use this, or they depend on future splits.
+    raw_close: np.ndarray | None = None
 
     def __len__(self) -> int:
         return len(self.dates)
@@ -35,7 +38,12 @@ class Bars:
         """Only bars dated on or before ``last`` (what was known after that day's close)."""
         n = int(np.searchsorted(np.array([d.toordinal() for d in self.dates]), last.toordinal(), side="right"))
         return Bars(self.ticker, self.dates[:n], self.open[:n], self.high[:n], self.low[:n], self.close[:n],
-                    self.volume[:n], self.source)
+                    self.volume[:n], self.source, None if self.raw_close is None else self.raw_close[:n])
+
+    @property
+    def traded_close(self) -> np.ndarray:
+        """The real (unadjusted) close where known, else the adjusted close."""
+        return self.close if self.raw_close is None else self.raw_close
 
 
 def parse_ohlcv_csv(text: str, ticker: str, source: str) -> Bars:

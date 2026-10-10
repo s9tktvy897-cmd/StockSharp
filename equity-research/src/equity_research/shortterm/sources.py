@@ -20,6 +20,7 @@ from equity_research.shortterm.catalysts import (CURRENT_FEED_URL, NEW_YORK, Fil
                                                  parse_current_feed, parse_submissions)
 from equity_research.valuation.run import FETCH_ERRORS
 
+SUBMISSIONS_FILE_URL = "https://data.sec.gov/submissions/{name}"
 EXCHANGE_TICKERS_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 LISTED = ("Nasdaq", "NYSE")
 
@@ -39,6 +40,15 @@ class Listing:
     cik: str
     name: str
     exchange: str
+
+
+@dataclass
+class Company:
+    ticker: str
+    sic: str
+    sic_description: str
+    filings: list[Filing]
+    timing: str
 
 
 @dataclass
@@ -74,6 +84,19 @@ class ShortTermSources:
         ``catalysts.calibrate_times``)."""
         data = json.loads(self._get(SUBMISSIONS_URL.format(cik=listing.cik), max_age))
         return calibrate_times(parse_submissions(data, listing.ticker), self.accepted_on_index)
+
+    def company(self, listing: Listing, full_history: bool = False, max_age: timedelta | None = timedelta(days=1)):
+        """SIC code and 8-K filings of a company. ``full_history`` also reads the older submission
+        files (the main file only holds the most recent ~1000 filings)."""
+        data = json.loads(self._get(SUBMISSIONS_URL.format(cik=listing.cik), max_age))
+        filings = parse_submissions(data, listing.ticker)
+        if full_history:
+            for extra in data.get("filings", {}).get("files", []):
+                older = json.loads(self._get(SUBMISSIONS_FILE_URL.format(name=extra["name"]), None))
+                filings += parse_submissions({"cik": data.get("cik"), "filings": {"recent": older}}, listing.ticker)
+        unique = {f.accession: f for f in filings}
+        checked, timing = calibrate_times(sorted(unique.values(), key=lambda f: f.accepted), self.accepted_on_index)
+        return Company(listing.ticker, str(data.get("sic") or ""), data.get("sicDescription", ""), checked, timing)
 
     def accepted_on_index(self, url: str) -> datetime:
         """The 'Accepted' time (New York) shown on an EDGAR filing index page. Filed documents do

@@ -38,6 +38,8 @@ class EngineResult:
     ranking_backtest: BacktestResult | None = None  # the backtest of the ranking used for the candidates
     production_model: dict[int, str] = field(default_factory=dict)
     ranked_by: str = ""
+    ranking_horizon: int = 0
+    ranking_code: str = ""  # short name of the ranking for the prediction ledger
     candidates: list[Candidate] = field(default_factory=list)
     raw_scanner: list[tuple[str, float, dict]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
@@ -123,18 +125,22 @@ def run(universe: dict[str, Bars], filings: dict[str, list[Filing]] | None, conf
         result.ranked_by = (f"verwacht netto rendement na kosten voor {h} dag(en) ({result.return_models[h]}; alleen "
                             f"bij een positieve verwachting; na kosten winstgevend in de backtest)")
         result.ranking_backtest = result.return_backtests[h]
+        result.ranking_horizon, result.ranking_code = h, "SHORTTERM_EXPECTED_RETURN"
     elif edge_ok:
         h = edge_ok[0]
         ranking = probabilities[h] - drop_probabilities[h]
         result.ranked_by = f"kans op stijging min kans op daling voor {h} dag(en) (na kosten winstgevend in de backtest)"
         result.ranking_backtest = result.edge_backtests[h]
+        result.ranking_horizon, result.ranking_code = h, "SHORTTERM_EDGE"
     elif model_ok:
         h = model_ok[0]
         ranking, result.ranked_by = probabilities[h], f"modelscore voor {h} dag(en) ({result.production_model[h]})"
         result.ranking_backtest = result.backtests[h]
+        result.ranking_horizon, result.ranking_code = h, "SHORTTERM_TARGET10_MODEL"
     elif scanner_ok:
         ranking, result.ranked_by = scanner_all, f"scannerregel (gevalideerd als rangschikking voor {scanner_ok[0]} dag(en))"
         result.ranking_backtest = result.scanner_backtests[scanner_ok[0]]
+        result.ranking_horizon, result.ranking_code = scanner_ok[0], "SHORTTERM_SCANNER"
     else:
         ranking, result.ranked_by = scanner_all, "scannerregel (niet gevalideerd)"
     result.candidates, notes = select(panel, ranking, result.ranked_by, probabilities, result.oos, result.backtests,
