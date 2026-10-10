@@ -81,8 +81,10 @@ de gebruiker of de sessie-instructies daarom vragen.
 Geen blogs, fora of AI-samenvattingen als bron voor getallen. Bij tegenstrijdige bronnen:
 de officiële filing wint, en het verschil wordt gerapporteerd.
 
-**Breed webonderzoek voor context (bij elke analyse).** Zoek met WebSearch/WebFetch op zoveel
-mogelijk betrouwbare sites (IR-site van het bedrijf, SEC-filings, persberichten, Reuters, AP,
+**Breed webonderzoek voor context (bij elke analyse).** Volg de projectskill `brede-bronnen`
+(`.claude/skills/brede-bronnen/SKILL.md`): acht parallelle zoekagenten per soort bron, richtwaarde
+≥ 100 bekeken pagina's en ≥ 25 verschillende sites; het rapport toont de dekking en waarschuwt onder
+10 sites. Zoek met WebSearch/WebFetch op zoveel mogelijk betrouwbare sites (IR-site van het bedrijf, SEC-filings, persberichten, Reuters, AP,
 Bloomberg, CNBC, WSJ, FT, vakmedia, toezichthouders zoals FDA/FTC/EU) naar: recent nieuws,
 guidance en cijferdata, productnieuws, juridische en regelgevende zaken, managementwissels,
 overnames, en het oordeel van analisten. Regels:
