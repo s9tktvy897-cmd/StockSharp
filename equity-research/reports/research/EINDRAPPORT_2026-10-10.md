@@ -201,7 +201,7 @@ NO TRADE). Live trading: niet geautoriseerd, geen brokerkoppeling.
 
 ## 10. Testresultaten
 
-`python -m pytest -q`: **236 geslaagd, 0 mislukt, 0 overgeslagen** (2 waarschuwingen), was 188 bij de start.
+`python -m pytest -q`: **241 geslaagd, 0 mislukt, 0 overgeslagen** (2 waarschuwingen), was 188 bij de start. Inclusief de ochtendscanner en de limiet-/stopregels in het register.
 Nieuw o.a.: look-ahead-tests per kenmerk, prijsfilter na splits, earnings-reactievlag, kostenmodel,
 deelvullingen, handelsstops, gap-stops, risicolimieten, noodstop en herstart, gevectoriseerde correlatie,
 statistiek (bootstrap, Holm, deflated Sharpe), protocolstatussen, runner zonder holdout-lek,
