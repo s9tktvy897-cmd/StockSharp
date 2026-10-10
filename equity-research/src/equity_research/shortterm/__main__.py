@@ -85,6 +85,113 @@ def _live_filings(sources: ShortTermSources, hours: int, missing: list[str]) -> 
         return [], names
 
 
+def _todays_opens(tickers: list[str], day) -> dict[str, float]:
+    """First 5-minute bar of the regular session today (Yahoo, secondary)."""
+    import yfinance
+    out = {}
+    for k in range(0, len(tickers), 200):
+        chunk = tickers[k:k + 200]
+        frame = yfinance.download([t.replace(".", "-") for t in chunk], period="1d", interval="5m", group_by="ticker",
+                                  progress=False, auto_adjust=False, prepost=False, threads=True)
+        if frame is None or frame.empty:
+            continue
+        for t in chunk:
+            sym = t.replace(".", "-")
+            try:
+                part = frame[sym]["Open"].dropna()
+            except KeyError:
+                continue
+            part = part[[ts.tz_convert(cat.NEW_YORK).date() == day for ts in part.index]]
+            if len(part):
+                out[t] = float(part.iloc[0])
+    return out
+
+
+def run_opening(args, sources: ShortTermSources, config: Config) -> None:
+    import json as _json
+    from equity_research.data.yahoo import YahooPrices
+    from equity_research.shortterm import opening
+    from equity_research.shortterm.features import rolling
+
+    now_et = datetime.now(timezone.utc).astimezone(cat.NEW_YORK)
+    if not args.any_time and not (now_et.weekday() < 5 and (9, 35) <= (now_et.hour, now_et.minute) <= (11, 0)):
+        print(f"outside the 09:35-11:00 ET window ({now_et:%Y-%m-%d %H:%M} ET): nothing to do")
+        return
+    missing: list[str] = []
+    listings = sources.listings()
+    tickers = sorted(listings)[:args.max_tickers] if args.max_tickers else sorted(listings)
+    bars, problems = YahooPrices(Path(__file__).resolve().parents[3] / "data" / "cache").bars(tickers)
+    if problems:
+        missing.append(f"Yahoo dagkoersen: {len(problems)} tickers zonder data")
+    today = now_et.date()
+    liquid = {}
+    for t, b in bars.items():
+        past = [i for i, d in enumerate(b.dates) if d < today]
+        if len(past) < 21:
+            continue
+        i = past[-1]
+        dv = float(rolling(b.close * b.volume, 20, lambda x, axis: x.mean(axis=axis))[i])
+        if b.traded_close[i] >= config.min_price and dv >= config.min_dollar_volume:
+            liquid[t] = (i, dv)
+    opens = _todays_opens(sorted(liquid), today)
+    if not opens:
+        missing.append("Yahoo: geen openingskoersen van vandaag (markt dicht of bron niet bereikbaar)")
+    since = datetime.combine(max(bars[t].dates[i] for t, (i, _) in liquid.items()) if liquid else today,
+                             datetime.min.time().replace(hour=16), cat.NEW_YORK).astimezone(timezone.utc)
+    try:
+        filings = sources.current_8k(since)
+    except FETCH_ERRORS as error:
+        filings, _ = [], missing.append(f"SEC live feed: {error}")
+    by_cik = {}
+    for l in listings.values():
+        by_cik.setdefault(l.cik, l.ticker)
+    news = {}
+    for f in filings:
+        t = by_cik.get(f.cik)
+        if t:
+            news.setdefault(t, []).append(f.items)
+    situations = []
+    for t, open_price in opens.items():
+        i, dv = liquid[t]
+        b = bars[t]
+        prev = float(b.close[i])
+        move = float(b.close[i] / b.close[i - 1] - 1) if i else 0.0
+        situations.append(opening.Situation(t, listings[t].name, prev, open_price, move,
+                                            opening.news_label(news.get(t, [])), dv))
+    research = ROOT / "reports" / "research"
+    load = lambda pattern: (_json.loads(sorted(research.glob(pattern))[-1].read_text(encoding="utf-8"))
+                            if list(research.glob(pattern)) else None)
+    hourly, daily = load("after_open_hourly_*.json"), load("after_open_daily_*.json")
+    if hourly is None and daily is None:
+        missing.append("geen onderzoeksresultaten na de opening gevonden in reports/research")
+    decision = opening.decide(situations, hourly, daily)
+    text = opening.render(decision, today, opening.RiskPlan(), missing)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    path = args.output_dir / f"opening_{today}.md"
+    path.write_text(text, encoding="utf-8")
+    book = ledger_mod.Ledger(args.ledger)
+    logged = 0
+    code = _git_revision()
+    for group, rows in (("validated", decision.tradable), ("watch", decision.watch)):
+        for s, ev in rows:
+            signal_day = bars[s.ticker].dates[liquid[s.ticker][0]]
+            try:
+                book.add(ledger_mod.Prediction(
+                    ticker=s.ticker, security_id=f"CIK{listings[s.ticker].cik}", strategy="OPENING_" + group.upper(),
+                    horizon=1, model_version=code, dataset_version=f"open {today} (Yahoo 5m), daily bars to {signal_day}",
+                    signal_date=signal_day, direction="long",
+                    expected_return=max(e.mean_net for e in ev) if ev else None,
+                    probabilities={"peak_5": max((e.p_peak_5 or 0) for e in ev), "low_5": max((e.p_low_5 or 0) for e in ev)},
+                    expected_cost_per_side=config.costs.per_side(s.dollar_volume), paper_trade=group == "validated",
+                    strategy_status="validated" if group == "validated" else "RESEARCH ONLY (watch list)",
+                    target=0.05, stop=0.05), datetime.now(timezone.utc))
+                logged += 1
+            except ValueError:
+                pass
+    print(f"opening scan written: {path}; decision {decision.verdict}; {len(situations)} stocks with an open; "
+          f"{logged} ledger records")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m equity_research.shortterm")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -99,12 +206,20 @@ def main(argv: list[str] | None = None) -> None:
         p.add_argument("--output-dir", type=Path, default=REPORTS)
         p.add_argument("--context", type=Path, help="Markdown with sourced web context (each bullet: URL + date)")
         p.add_argument("--ledger", type=Path, default=LEDGER, help="immutable prediction ledger (JSON lines)")
+    o = sub.add_parser("opening", help="morning scan after the US open (watch list + ledger; NO TRADE unless validated)")
+    o.add_argument("--ledger", type=Path, default=LEDGER)
+    o.add_argument("--output-dir", type=Path, default=ROOT / "reports" / "opening")
+    o.add_argument("--max-tickers", type=int, default=0)
+    o.add_argument("--any-time", action="store_true", help="skip the 09:35-11:00 ET window check (testing)")
     c = sub.add_parser("catalysts")
     c.add_argument("--hours", type=int, default=24)
     args = parser.parse_args(argv)
 
     sources = ShortTermSources()
     config = Config()
+    if args.command == "opening":
+        run_opening(args, sources, config)
+        return
     if args.command == "catalysts":
         missing: list[str] = []
         filings, names = _live_filings(sources, args.hours, missing)

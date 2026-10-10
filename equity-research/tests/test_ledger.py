@@ -93,3 +93,27 @@ def test_new_ledger_must_extend_the_old_one(tmp_path):
     rewritten.add(_prediction(ticker="CCC"), NOW)
     assert ledger.check_extension(tmp_path / "old.jsonl", tmp_path / "other.jsonl")
     assert ledger.check_extension(tmp_path / "missing.jsonl", tmp_path / "new.jsonl") == []  # first run
+
+
+def test_target_and_stop_are_evaluated_like_the_backtest(tmp_path):
+    import dataclasses
+    book = ledger.Ledger(tmp_path / "l.jsonl")
+    # entry day: open 10, high 10.6 -> +5% target (10.5) hit intraday
+    up = make_bars("UP", [10, 10.2, 10.4], opens=[10, 10, 10.3], highs=[10, 10.6, 10.5], lows=[10, 9.9, 10.2],
+                   start=date(2020, 1, 1))
+    # entry day: low 9.4 -> -5% stop (9.5) hit; same bar also reaches the target: the stop counts
+    both = make_bars("BOTH", [10, 10, 10], opens=[10, 10, 10], highs=[10, 10.6, 10], lows=[10, 9.4, 10],
+                     start=date(2020, 1, 1))
+    # second day gaps below the stop: filled at that open (8.0), not at the stop price
+    gap = make_bars("GAP", [10, 9.8, 8.1], opens=[10, 10, 8.0], highs=[10, 10.1, 8.2], lows=[10, 9.7, 7.9],
+                    start=date(2020, 1, 1))
+    ids = {}
+    for b in (up, both, gap):
+        p = dataclasses.replace(_prediction(ticker=b.ticker, signal=b.dates[0], horizon=2), target=0.05, stop=0.05)
+        ids[b.ticker] = book.add(p, NOW)
+    book.evaluate({"UP": up, "BOTH": both, "GAP": gap}, NOW, cost_per_side=lambda t, i: 0.0)
+    close = lambda t: next(e for e in book.events(ids[t]) if e["type"] == "CLOSED")["payload"]
+    assert close("UP")["exit_price"] == pytest.approx(10.5) and close("UP")["reason"] == "target"
+    assert close("BOTH")["exit_price"] == pytest.approx(9.5) and close("BOTH")["reason"] == "stop"
+    assert close("GAP")["exit_price"] == pytest.approx(8.0) and close("GAP")["reason"] == "stop (gap below)"
+    assert close("GAP")["net"] == pytest.approx(-0.2)

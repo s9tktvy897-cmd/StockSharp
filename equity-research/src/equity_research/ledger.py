@@ -40,10 +40,32 @@ class Prediction:
     expected_cost_per_side: float | None = None
     paper_trade: bool = False
     strategy_status: str = ""
+    target: float | None = None   # +target limit exit (fraction of the entry price), checked day by day
+    stop: float | None = None     # stop exit; a gap below it fills at that open, never a guaranteed price
 
     @property
     def id(self) -> str:
         return f"{self.signal_date.isoformat()}:{self.strategy}:{self.horizon}d:{self.ticker}"
+
+
+def _target_or_stop(bars, first: int, last: int, entry_open: float, target: float | None, stop: float | None):
+    """(bar index, raw exit price, reason) of the first target or stop between ``first`` and ``last``; None if
+    neither. A later day opening beyond a level fills at that open; within one daily bar the stop counts first."""
+    if target is None and stop is None:
+        return None
+    up = entry_open * (1 + target) if target is not None else None
+    down = entry_open * (1 - stop) if stop is not None else None
+    for j in range(first, last + 1):
+        if j > first:
+            if down is not None and bars.open[j] <= down:
+                return j, float(bars.open[j]), "stop (gap below)"
+            if up is not None and bars.open[j] >= up:
+                return j, float(bars.open[j]), "target (gap above)"
+        if down is not None and bars.low[j] <= down:
+            return j, down, "stop"
+        if up is not None and bars.high[j] >= up:
+            return j, up, "target"
+    return None
 
 
 def _hash(prev: str, record: dict) -> str:
@@ -134,11 +156,14 @@ class Ledger:
                 changed["FILLED"] = changed.get("FILLED", 0) + 1
             fill = next(r for r in self.events(pid) if r["type"] == "FILLED")["payload"]
             exit_i = entry + h - 1
-            if exit_i < len(bars):
-                c = float(cost_per_side(ticker, exit_i))
-                price = float(bars.close[exit_i] * (1 - c))
-                self._append("CLOSED", pid, {"exit_date": bars.dates[exit_i].isoformat(), "exit_price": price, "cost": c,
-                                             "raw_close": float(bars.close[exit_i]),
+            hit = _target_or_stop(bars, entry, min(exit_i, len(bars) - 1), float(fill["raw_open"]), p.get("target"),
+                                  p.get("stop"))
+            if hit is not None or exit_i < len(bars):
+                j, raw, reason = hit if hit is not None else (exit_i, float(bars.close[exit_i]), "time")
+                c = float(cost_per_side(ticker, j))
+                price = raw * (1 - c)
+                self._append("CLOSED", pid, {"exit_date": bars.dates[j].isoformat(), "exit_price": price, "cost": c,
+                                             "raw_exit": raw, "reason": reason,
                                              "net": price / fill["entry_price"] - 1}, now)
                 changed["CLOSED"] = changed.get("CLOSED", 0) + 1
             elif (today - date.fromisoformat(fill["entry_date"])).days > int(h * 1.5) + EXPIRE_GRACE_DAYS:

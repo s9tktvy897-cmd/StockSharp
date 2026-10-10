@@ -13,9 +13,13 @@ on:
   pull_request:
     paths: ["equity-research/**", ".github/workflows/equity-research.yml"]
   schedule:
-    - cron: "45 12 * * 1-5"  # 08:45 New York (EDT) / 07:45 (EST), before the US open
+    - cron: "45 12 * * 1-5"     # daily scan: 08:45 New York (EDT) / 07:45 (EST), before the US open
+    - cron: "50 13,14 * * 1-5"  # opening scan: the run inside 09:35-11:00 New York does the work
   workflow_dispatch:
     inputs:
+      job:
+        description: "scan (daily scan) or opening (morning scan after the open)"
+        default: "scan"
       max_tickers:
         description: "Maximum number of tickers (0 = every NYSE/Nasdaq listing)"
         default: "0"
@@ -40,7 +44,8 @@ jobs:
       - run: python -m pytest -q
 
   daily-scan:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event.schedule == '45 12 * * 1-5' || (github.event_name == 'workflow_dispatch' && github.event.inputs.job != 'opening')
+    concurrency: paper-ledger  # one job at a time writes the ledger
     runs-on: ubuntu-latest
     timeout-minutes: 330
     permissions:
@@ -100,5 +105,64 @@ jobs:
           path: |
             equity-research/reports/shortterm/
             equity-research/predictions/
+            equity-research/ledger/
+          if-no-files-found: warn
+
+  opening-scan:
+    if: github.event.schedule == '50 13,14 * * 1-5' || (github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'opening')
+    concurrency: paper-ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write  # only to push the prediction ledger to the paper-ledger branch
+    env:
+      EQUITY_RESEARCH_USER_AGENT: ${{ secrets.EQUITY_RESEARCH_USER_AGENT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[dev]"
+      - uses: actions/cache/restore@v4
+        with:
+          path: equity-research/data/cache
+          key: equity-research-cache-${{ github.run_id }}
+          restore-keys: equity-research-cache-
+      - name: Restore the prediction ledger
+        run: |
+          if git ls-remote --exit-code origin paper-ledger > /dev/null; then
+            git fetch --depth=1 origin paper-ledger
+            git show FETCH_HEAD:ledger.jsonl > ledger/ledger.jsonl
+          fi
+          cp ledger/ledger.jsonl "$RUNNER_TEMP/ledger_before.jsonl"
+          python -m equity_research.ledger verify ledger/ledger.jsonl
+      - name: Opening scan (watch list; NO TRADE unless a situation is validated)
+        run: |
+          python -m equity_research.shortterm opening --max-tickers "${{ github.event.inputs.max_tickers || '0' }}" \
+            ${{ github.event_name == 'workflow_dispatch' && '--any-time' || '' }}
+          cat reports/opening/opening_*.md 2>/dev/null || true
+      - name: Save the prediction ledger (append-only)
+        if: github.ref == 'refs/heads/master'
+        run: |
+          python -m equity_research.ledger check-extension "$RUNNER_TEMP/ledger_before.jsonl" ledger/ledger.jsonl
+          git config --global user.name "equity-research ledger"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          store="$RUNNER_TEMP/ledger-store"
+          if git ls-remote --exit-code origin paper-ledger > /dev/null; then
+            git fetch origin paper-ledger:paper-ledger
+            git worktree add "$store" paper-ledger
+          else
+            git worktree add --orphan -b paper-ledger "$store"
+          fi
+          cp ledger/ledger.jsonl "$store/ledger.jsonl"
+          cd "$store"
+          git add ledger.jsonl
+          git commit -m "ledger: opening run ${{ github.run_id }}" || echo "no new records"
+          git push origin paper-ledger
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opening-${{ github.run_id }}
+          path: |
+            equity-research/reports/opening/
             equity-research/ledger/
           if-no-files-found: warn

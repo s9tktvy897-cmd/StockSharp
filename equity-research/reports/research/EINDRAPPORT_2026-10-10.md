@@ -7,8 +7,8 @@
 
 **Eindoordeel: NO PROVEN EDGE.** Van 34 vooraf vastgelegde strategievarianten (regels en modellen, horizons
 1–20 dagen) haalt **geen enkele** de criteria; alle 34 zijn REJECTED. Ook 468 verkennende combinaties van
-situatie × handelsregel rond de opening (dagdata, §5b) leveren geen significant positief resultaat op.
-Het onderzoek op uurkoersen loopt nog en wordt apart toegevoegd.
+situatie × handelsregel rond de opening (dagdata, §5b) en 792 combinaties op uurkoersen (§5c) leveren
+geen significant positief resultaat op.
 
 Wat niet werkte: het oorspronkelijke +10%-model voorspelde beweeglijkheid, geen richting (top-10: +10% in
 56,5%, −10% in 58,1%; −1,44% per trade), en de backtest had fouten die de uitkomst vertekenden.
@@ -104,6 +104,59 @@ of op het slot na 1–2 dagen; 468 combinaties, Holm-gecorrigeerd: **0 significa
 | volatiliteit > 8%/dag | 38,8% | 41,2% | 45,1% | −0,54% | −1,01% |
 
 Een hoge kans op +5% bestaat alleen waar de kans op −5% even hoog is.
+
+### 5c. Verkennend: de hoogste koers ná de opening (uurkoersen, okt 2024 – okt 2026, 1,33 mln aandeel-dagen)
+
+Instap op de opening (09:30 ET); hoogste koers over de hele dag; regels: limiet +5/+7/+10%, met/zonder stop 5%,
+verkopen om 11:30, 13:30 of op het slot (binnen een uur geldt de stop eerst). 792 combinaties, Holm: **0 significant**.
+
+| Uur van de dagpiek (ET) | alle dagen | dagen met piek ≥ +5% |
+|---|---|---|
+| 09:30–10:30 | 51,0% | 20,3% |
+| 10:30–11:30 | 9,9% | 11,7% |
+| 11:30–14:30 | 17,7% | 28,6% |
+| 14:30–15:30 | 7,5% | 14,7% |
+| 15:30–16:00 | 13,9% | 24,8% |
+
+| Situatie | Piek ≥ +5% | Dal ≤ −5% | Mediane piek | Terugval piek→slot | Beste regel netto/trade (95%-BI) |
+|---|---|---|---|---|---|
+| alle dagen | 7,4% | 7,3% | 1,26% | 1,98% | −0,46% (−0,51% – −0,40%) |
+| earnings-8-K vóór de opening | 30,8% | 33,1% | 2,95% | 4,42% | −0,54% (−0,64% – −0,41%) |
+| gap −10..−3% | 29,5% | 26,3% | 2,93% | 4,19% | −0,13% (−0,47% – +0,27%) |
+| gap < −10% | 56,8% | 54,6% | 6,02% | 9,51% | −0,34% (−0,60% – +0,01%) |
+| gap +10..+20% | 46,9% | 54,9% | 4,61% | 8,50% | −0,87% (−1,22% – −0,54%) |
+| gap > +20% | 65,5% | 74,0% | 8,14% | 16,41% | −0,59% (−1,26% – +0,09%) |
+| volatiliteit > 8%/dag | 38,8% | 43,0% | 3,62% | 6,60% | −0,78% (−0,87% – −0,65%) |
+
+Op gewone dagen valt de piek meestal in het eerste uur; op dagen met ≥ +5% komt de piek vaak laat (een kwart
+in het laatste halfuur). Gap-ups van > 20% pieken vroeg en zakken gemiddeld 16% terug tot het slot. De piek is
+achteraf zichtbaar, maar geen vaste regel pakt hem met winst na kosten.
+
+### 5d. Waar komt +5% realistisch vandaan? Aanhoudperiode (na kosten, ontwikkelperiode 2017–2025)
+
+| Wat en hoe lang | Gemiddeld | Mediaan | Kans ≥ +5% | Kans op verlies |
+|---|---|---|---|---|
+| willekeurig aandeel, 1 dag | −0,47% | −0,45% | 2,0% | 61,8% |
+| willekeurig aandeel, 20 dagen | +0,46% | +0,22% | 29,3% | 48,9% |
+| willekeurig aandeel, 120 dagen | +5,18% | +2,52% | 45,5% | 45,4% |
+| SPY, 120 dagen | +6,95% | +7,95% | 63,8% | 21,4% |
+| SPY, 250 dagen | +15,30% | +16,30% | 79,9% | 14,2% |
+| momentum top-10, 120 dagen | +15,26% | −0,56% | 45,5% | 50,5% |
+| earnings drift top-10, 120 dagen | +5,89% | +2,24% | 45,4% | 46,1% |
+
+Holdout (okt 2025 – okt 2026): SPY 120 dagen ≥ +5% in 84,8%; momentum top-10 120 dagen gemiddeld −13,59%.
+De betrouwbaarste +5% in deze data komt van tijd en spreiding (de index maanden aanhouden), niet van een
+dagtrade; een hoog gemiddelde met een negatieve mediaan (momentum) betekent dat de typische trade verliest.
+Bron: `reports/research/holding_period_2026-10-10.json`, `studies/holding_study.py`.
+
+### 5e. Ochtendscanner
+
+`python -m equity_research.shortterm opening` (dagelijks 09:50 ET via GitHub Actions): bepaalt per liquide
+aandeel de situatie na de opening (gap, 8-K's sinds het slot, beweging van gisteren), hangt er de gemeten
+kansen en regelresultaten uit §5b/§5c aan, en geeft **NO TRADE** zolang geen situatie significant positief is
+én positief in de holdout. De volglijst gaat als niet-gevalideerde voorspelling (limiet +5%, stop 5%,
+horizon 1 dag) in het register, zodat de echte vooruitblik zich opbouwt. Met een vast risicoplan
+(max. 1% risico per trade, 3 trades per dag, stoppen na −3% dagverlies of 3 verliezen op rij).
 
 ## 6. Backtestresultaten en benchmarks
 
