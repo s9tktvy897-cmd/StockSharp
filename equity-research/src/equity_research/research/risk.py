@@ -64,9 +64,10 @@ class Decision:
 
 
 class RiskManager:
-    def __init__(self, limits: RiskLimits | None = None, correlation=None):
+    def __init__(self, limits: RiskLimits | None = None, correlation=None, correlation_many=None):
         self.limits = limits or RiskLimits()
         self.correlation = correlation  # callable(ticker_a, ticker_b, signal_date) -> float | None
+        self.correlation_many = correlation_many  # callable(ticker, [held], signal_date) -> [float | None]
 
     def update(self, state: PortfolioState) -> str | None:
         """Called after each close: sets the block on new orders after a breach. Returns
@@ -130,12 +131,16 @@ class RiskManager:
             if value < lim.min_order_value:
                 out.blocked.append((o, "no room within exposure, sector or size limits"))
                 continue
-            if self.correlation is not None:
+            too_close = None
+            if self.correlation_many is not None and held:
+                corr = self.correlation_many(o.ticker, held, o.signal_date)
+                too_close = next((h for h, c in zip(held, corr) if c is not None and c > lim.max_correlation), None)
+            elif self.correlation is not None:
                 too_close = next((h for h in held if (c := self.correlation(o.ticker, h, o.signal_date)) is not None
                                   and c > lim.max_correlation), None)
-                if too_close:
-                    out.blocked.append((o, f"correlation with {too_close} above maximum"))
-                    continue
+            if too_close:
+                out.blocked.append((o, f"correlation with {too_close} above maximum"))
+                continue
             out.accepted.append(Order(o.ticker, o.signal_date, o.score, value, o.price, o.dollar_volume, o.daily_vol,
                                       o.spread, o.sector))
             invested += value

@@ -177,3 +177,23 @@ def test_kill_switch_fires_once_per_breach_and_trading_restarts():
     assert entries[-1] > days[150]                      # trading resumed late in the period
     from equity_research.research import stats
     assert stats.max_drawdown(res.returns) < -0.30      # the real drawdown is reported, not capped at -20%
+
+
+def test_vectorized_correlations_match_the_pairwise_ones():
+    rng = np.random.default_rng(1)
+    n = 120
+    base = rng.normal(0, 0.02, n)
+    universe = {}
+    for k, mix in enumerate((1.0, 0.9, 0.0, -0.8)):
+        r = mix * base + np.sqrt(max(1 - mix * mix, 0)) * rng.normal(0, 0.02, n)
+        closes = 50 * np.cumprod(1 + r)
+        universe[f"S{k}"] = make_bars(f"S{k}", closes)
+    m = MarketData(universe)
+    day = m.bars["S0"].dates[100]
+    many = m.correlations("S0", ["S1", "S2", "S3"], day)
+    for t, c in zip(["S1", "S2", "S3"], many):
+        assert c == pytest.approx(m.correlation("S0", t, day), abs=1e-6)
+    rm = RiskManager(RiskLimits(risk_per_position=10.0, max_correlation=0.8, max_spread=1.0, min_dollar_volume=0),
+                     correlation_many=m.correlations)
+    d = rm.check([_order("S0")], _state(positions={"S1": 1.0}, invested=1.0), 50_000, slots=1)
+    assert d.accepted == [] and "S1" in d.blocked[0][1]

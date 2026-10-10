@@ -33,6 +33,41 @@ class MarketData:
         self.sectors = sectors or {}
         self.ordinals = {t: np.array([d.toordinal() for d in b.dates]) for t, b in universe.items()}
         self._cache: dict[str, dict[str, np.ndarray]] = {}
+        self._matrix = None  # (calendar ordinals, ticker -> row, returns matrix) for vectorized correlations
+
+    def _returns_matrix(self):
+        if self._matrix is None:
+            days = np.unique(np.concatenate([o for o in self.ordinals.values()])) if self.ordinals else np.array([])
+            row = {t: k for k, t in enumerate(self.bars)}
+            m = np.full((len(row), len(days)), np.nan, dtype=np.float32)
+            for t, k in row.items():
+                cols = np.searchsorted(days, self.ordinals[t])
+                m[k, cols] = self.arrays(t)["ret"]
+            self._matrix = (days, row, m)
+        return self._matrix
+
+    def correlations(self, ticker: str, others: list[str], day: date, window: int = 60) -> list[float | None]:
+        """Return correlations of ``ticker`` with each of ``others`` over the last ``window`` market days up to
+        ``day`` (pairwise complete days, at least window/2), all in one vectorized pass; None where the
+        overlap is too short."""
+        if not others:
+            return []
+        days, row, m = self._returns_matrix()
+        end = int(np.searchsorted(days, day.toordinal(), side="right"))
+        lo = max(end - window, 0)
+        a = m[row[ticker], lo:end].astype(float)[None, :]
+        x = m[[row[t] for t in others], lo:end].astype(float)
+        ok = np.isfinite(a) & np.isfinite(x)
+        n = ok.sum(axis=1)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            am = np.where(ok, a, np.nan)
+            xm = np.where(ok, x, np.nan)
+            da = am - np.nanmean(am, axis=1, keepdims=True)
+            dx = xm - np.nanmean(xm, axis=1, keepdims=True)
+            cov = np.nanmean(da * dx, axis=1)
+            corr = cov / np.sqrt(np.nanmean(da * da, axis=1) * np.nanmean(dx * dx, axis=1))
+        return [float(c) if k >= window // 2 and np.isfinite(c) else None for c, k in zip(corr, n)]
+
 
     def arrays(self, ticker: str) -> dict[str, np.ndarray]:
         if ticker not in self._cache:
