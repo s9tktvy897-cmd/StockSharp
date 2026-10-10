@@ -57,7 +57,9 @@ LINE_ITEMS: tuple[LineItem, ...] = (
     # Balance sheet
     _i("total_assets", "Assets"),
     _i("current_assets", "AssetsCurrent"),
-    _i("cash", "CashAndCashEquivalentsAtCarryingValue"),
+    # Fallback: filers that show restricted cash on the cash line (PG since 2019) only tag the total
+    # incl. restricted cash; slightly overstates cash, so net debt is slightly understated.
+    _i("cash", "CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"),
     _i("short_term_investments", "MarketableSecuritiesCurrent", "AvailableForSaleSecuritiesCurrent",
        "AvailableForSaleSecuritiesDebtSecuritiesCurrent", "ShortTermInvestments"),
     _i("long_term_investments", "MarketableSecuritiesNoncurrent", "AvailableForSaleSecuritiesNoncurrent",

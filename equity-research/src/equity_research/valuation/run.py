@@ -295,7 +295,9 @@ def run(args: argparse.Namespace, sources: Sources | None = None) -> ValuationRu
         out.multiples = multiples.market_multiples(
             price.value, outstanding.value, debt, out.bridge.cash, out.bridge.investments,
             out.bridge.minority_interest, flows["revenue"].value, flows["operating_income"].value,
-            flows["net_income"].value, flows["operating_cash_flow"].value - flows["capex"].value)
+            flows["net_income"].value,
+            None if flows["operating_cash_flow"].value is None or flows["capex"].value is None
+            else flows["operating_cash_flow"].value - flows["capex"].value)
     if rf and g > rf.value:
         out.warnings.append("terminal growth exceeds the risk-free rate")
     return out
