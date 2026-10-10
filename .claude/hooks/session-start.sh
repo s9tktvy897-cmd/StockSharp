@@ -27,5 +27,5 @@ echo "equity-research: network -> data.sec.gov $(check https://data.sec.gov/), w
 if [ -z "${EQUITY_RESEARCH_USER_AGENT:-}" ]; then
   echo "equity-research: EQUITY_RESEARCH_USER_AGENT is NOT set -- live SEC requests will fail; tell the user to add it to the environment variables."
 fi
-echo "equity-research: for stock analysis follow equity-research/CLAUDE.md (Dutch chat, fixed method, sources, web context with links, no invented numbers); for web context use the skill brede-bronnen (eight parallel search agents, >= 100 pages, >= 25 sites); a BLOCKED source is reported, never filled in."
+echo "equity-research: for stock analysis follow equity-research/CLAUDE.md (Dutch chat, fixed method, sources, web context with links, no invented numbers); every analysis is always the full, in-depth version: use the skill brede-bronnen (eight parallel search agents, primary filings read in full, a second round for gaps, >= 100 pages, >= 25 sites); a BLOCKED source is reported, never filled in."
 exit 0
