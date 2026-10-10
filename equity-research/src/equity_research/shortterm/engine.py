@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta
 
 import numpy as np
 
-from equity_research.shortterm import backtest, evaluation, models
+from equity_research.shortterm import backtest, evaluation, expected, models
 from equity_research.shortterm.backtest import BacktestResult
 from equity_research.shortterm.bars import Bars, validate
 from equity_research.shortterm.catalysts import Filing
@@ -33,6 +33,8 @@ class EngineResult:
     backtests: dict[int, BacktestResult] = field(default_factory=dict)
     scanner_backtests: dict[int, BacktestResult] = field(default_factory=dict)
     edge_backtests: dict[int, BacktestResult] = field(default_factory=dict)  # ranked by P(rise) - P(fall)
+    return_backtests: dict[int, BacktestResult] = field(default_factory=dict)  # expected net return > 0 only
+    return_models: dict[int, str] = field(default_factory=dict)
     ranking_backtest: BacktestResult | None = None  # the backtest of the ranking used for the candidates
     production_model: dict[int, str] = field(default_factory=dict)
     ranked_by: str = ""
@@ -95,18 +97,33 @@ def run(universe: dict[str, Bars], filings: dict[str, list[Filing]] | None, conf
                            {n: float(panel.column(n)[r]) for n in ("rvol", "ret_1d", "gap", "breakout_20")})
                           for r in order]
 
+    expected_returns: dict[int, np.ndarray | None] = {}
     for h in config.horizons:
         edge = result.oos[h].scores - result.oos_drop[h].scores
         result.edge_backtests[h] = backtest.run(panel, edge, universe, config, h)
+        ret_oos = expected.out_of_sample(panel, h, config)
+        result.return_backtests[h] = backtest.run(panel, expected.selective(ret_oos.scores, config), universe, config, h)
+        model = expected.production(panel, h, config)
+        expected_returns[h] = expected.selective(model.predict(panel.X), config) if model else None
+        if model:
+            result.return_models[h] = model.name
 
     def profitable(bt: BacktestResult) -> bool:
         return bool(bt.summary.get("trades")) and bt.summary["mean_net_ci"][0] > 0
 
+    return_ok = [h for h in sorted(config.horizons, reverse=True) if profitable(result.return_backtests[h])
+                 and expected_returns[h] is not None]
     edge_ok = [h for h in sorted(config.horizons, reverse=True) if profitable(result.edge_backtests[h])
                and probabilities[h] is not None and drop_probabilities[h] is not None]
     model_ok = [h for h in sorted(config.horizons, reverse=True) if result.oos[h].gate.passed and probabilities[h] is not None]
     scanner_ok = [h for h in sorted(config.horizons, reverse=True) if result.oos[h].scanner_gate.passed]
-    if edge_ok:
+    if return_ok:
+        h = return_ok[0]
+        ranking = expected_returns[h]
+        result.ranked_by = (f"verwacht netto rendement na kosten voor {h} dag(en) ({result.return_models[h]}; alleen "
+                            f"bij een positieve verwachting; na kosten winstgevend in de backtest)")
+        result.ranking_backtest = result.return_backtests[h]
+    elif edge_ok:
         h = edge_ok[0]
         ranking = probabilities[h] - drop_probabilities[h]
         result.ranked_by = f"kans op stijging min kans op daling voor {h} dag(en) (na kosten winstgevend in de backtest)"
@@ -122,6 +139,6 @@ def run(universe: dict[str, Bars], filings: dict[str, list[Filing]] | None, conf
         ranking, result.ranked_by = scanner_all, "scannerregel (niet gevalideerd)"
     result.candidates, notes = select(panel, ranking, result.ranked_by, probabilities, result.oos, result.backtests,
                                       bars_source, names, filings, problems, config,
-                                      bool(edge_ok or model_ok or scanner_ok), drop_probabilities)
+                                      bool(return_ok or edge_ok or model_ok or scanner_ok), drop_probabilities)
     result.notes += notes
     return result

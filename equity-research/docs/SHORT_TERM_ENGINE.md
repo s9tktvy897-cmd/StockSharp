@@ -39,7 +39,10 @@ gives the type of event, not its direction.
 ## Outcomes (`labels.py`)
 
 From the open of t+1: `hit` = high within t+1..t+h ≥ 1.10 × open; `drop` = low ≤ 0.90 × open;
-close-to-open return. Rows whose window crosses a data gap (> 5 calendar days) get no outcome.
+close-to-open return; `trade_gross` = the return of the actual trade rule without a stop (exit at
++10% with a limit, at the open when a later day gaps above it, else at the horizon close; identical
+to `backtest.simulate`). `dataset.py` turns it into `net` after the cost tier of the row's liquidity.
+Rows whose window crosses a data gap (> 5 calendar days) get no outcome.
 
 ## Models and validation (`models.py`, `evaluation.py`)
 
@@ -63,6 +66,16 @@ warning. First whole-market run (2026-10-09, 1.25 million stock-days, test years
 rise model's top 10 hit +10% in 44% (1d) / 56% (2d) of cases against a 1.2% / 3.5% base rate, but
 fell 10% or more in 50% / 59% and lost 1.1% / 1.6% per trade after costs: it predicts volatility,
 not direction.
+
+**Expected-return ranking (`expected.py`).** Because touching +10% mostly measures volatility,
+a second family of models predicts the trade's **net return after costs** (`net`, clipped to
+±50%): ridge regression (L2 10 / 10 000) and gradient-boosting regression, chosen per fold on the
+validation year by the mean net return of their daily top picks. Only rows with a predicted net
+return above `Config.min_expected_net` (fixed at 0, not tuned) are traded, so many days have no
+pick. Same walk-forward folds and embargo. This ranking comes first for the candidates, but only
+when its own backtest has a 95% CI of the mean net return above zero; otherwise the order is the
+edge ranking, the rise model, the scanner rule, each with the same profitability rule or a loss
+warning.
 
 **8-K timing.** For some filings (per filing, not per filer) the SEC submissions time is the true
 time plus the New York UTC offset. Times are never moved earlier (that could leak news); late

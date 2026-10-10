@@ -114,6 +114,9 @@ def render(r: EngineResult, live_filings: list[Filing], names: dict[str, str], m
             if h in r.edge_backtests:
                 rows.append(_summary_row(f"Model stijging − daling {h}d", r.edge_backtests[h].summary,
                                          r.edge_backtests[h].max_drawdown))
+            if h in r.return_backtests:
+                rows.append(_summary_row(f"Verwacht rendement > 0 {h}d", r.return_backtests[h].summary,
+                                         r.return_backtests[h].max_drawdown))
             b = r.backtests[h].benchmark
             rows.append([f"Alle aandelen {h}d (vergelijking)", b["rows"], pct(b["hit_rate"]), pct(b["drop_rate"]),
                          pct(b["mean_net_hold"], 2) + " (vasthouden)", MISSING, MISSING, MISSING, MISSING])
@@ -131,6 +134,13 @@ def render(r: EngineResult, live_filings: list[Filing], names: dict[str, str], m
                          + ("ze dalen bijna even vaak fors als ze stijgen, dus het model voorspelt vooral beweeglijkheid, "
                             "geen richting." if ratio >= 0.75 else
                             "stijgingen komen duidelijk vaker voor dan dalingen."))
+        for h, bt in r.return_backtests.items():
+            s = bt.summary
+            verdict = ("historisch winstgevend na kosten (ondergrens 95%-BI > 0)" if s.get("trades")
+                       and s["mean_net_ci"][0] > 0 else "niet aantoonbaar winstgevend na kosten")
+            L.append(f"- Verwacht rendement {h}d (model voorspelt het netto resultaat van de trade, handelt alleen bij "
+                     f"een positieve verwachting): {verdict}; testdagen zonder enige trade: "
+                     f"{max(r.backtests[h].days - bt.days, 0) + bt.days_without_picks} van {r.backtests[h].days}.")
         L.append("")
         for h, bt in r.backtests.items():
             if bt.by_year:

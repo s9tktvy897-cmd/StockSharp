@@ -20,6 +20,14 @@ class Costs:
                 return (self.commission_bps + self.slippage_bps + bps) / 1e4
         return (self.commission_bps + self.slippage_bps + self.half_spread_tiers[-1][1]) / 1e4
 
+    def per_side_array(self, dollar_volume):
+        import numpy as np
+        dv = np.asarray(dollar_volume, dtype=float)
+        spread = np.full(dv.shape, self.half_spread_tiers[-1][1])
+        for floor, bps in reversed(self.half_spread_tiers):
+            spread = np.where(dv >= floor, bps, spread)
+        return (self.commission_bps + self.slippage_bps + spread) / 1e4
+
 
 @dataclass(frozen=True)
 class Config:
@@ -34,3 +42,6 @@ class Config:
     stop_loss: float | None = None  # None: exit at the horizon close unless the target is hit
     same_bar_stop_first: bool = True  # if target and stop fall in one bar, assume the stop came first
     costs: Costs = field(default_factory=Costs)
+    # Expected-return ranking: trade only rows whose predicted net return (after costs) exceeds this.
+    # Fixed at 0 (not tuned): a trade with a negative expectation is never taken.
+    min_expected_net: float = 0.0

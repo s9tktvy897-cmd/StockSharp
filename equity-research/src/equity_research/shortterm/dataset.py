@@ -68,6 +68,10 @@ def build_panel(universe: dict[str, Bars], filings: dict[str, list[Filing]] | No
     dollar = np.concatenate([f["dollar_volume_20"][idx] for _, _, f, _, idx in blocks])
     outcomes = {h: {k: np.concatenate([out[h][k][idx] for _, _, _, out, idx in blocks]) for k in blocks[0][3][h]}
                 for h in config.horizons}
+    # Net result of the actual trade rule after costs (spread tier by liquidity + slippage), per side.
+    cost = config.costs.per_side_array(dollar)
+    for h in config.horizons:
+        outcomes[h]["net"] = (1 + outcomes[h]["trade_gross"]) * (1 - cost) / (1 + cost) - 1
 
     # Market context from the same universe on the same day (known after that day's close).
     ordinal = np.array([d.toordinal() for d in dates])
