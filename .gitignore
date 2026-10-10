@@ -200,6 +200,7 @@ Documentation.shfbproj_Ivan
 .claude/*
 !.claude/settings.json
 !.claude/hooks/
+!.claude/skills/
 /reviewResults
 nul
 
