@@ -39,6 +39,11 @@ de gebruiker of de sessie-instructies daarom vragen.
    bias als het universum geen gedeliste aandelen bevat.
 7. **Geen beleggingsadvies.** Rapporten zijn analyses met onzekerheidsmarges, geen
    koop/verkoop-opdrachten. Eindig met risico's en wat de these zou ontkrachten.
+8. **Altijd uitgebreid en diepgaand.** Elke analyse is de volledige versie: alle stappen van §2,
+   breed webonderzoek in twee rondes en de primaire documenten (10-K, 10-Q's, 8-K's, proxy,
+   cijferpresentaties) volledig gelezen, volgens de skill `brede-bronnen`. Ook bij een kort
+   verzoek ("kijk even naar X"). Korter alleen als de gebruiker daar uitdrukkelijk om vraagt, en
+   dan staat "verkorte analyse" bovenaan het rapport en in de chat.
 
 ## 2. Vaste analysemethode (volgorde aanhouden)
 
@@ -82,7 +87,8 @@ Geen blogs, fora of AI-samenvattingen als bron voor getallen. Bij tegenstrijdige
 de officiële filing wint, en het verschil wordt gerapporteerd.
 
 **Breed webonderzoek voor context (bij elke analyse).** Volg de projectskill `brede-bronnen`
-(`.claude/skills/brede-bronnen/SKILL.md`): acht parallelle zoekagenten per soort bron, richtwaarde
+(`.claude/skills/brede-bronnen/SKILL.md`): acht parallelle zoekagenten per soort bron, de primaire
+documenten volledig gelezen en een tweede ronde om gaten te dichten; richtwaarde
 ≥ 100 bekeken pagina's en ≥ 25 verschillende sites; het rapport toont de dekking en waarschuwt onder
 10 sites. Zoek met WebSearch/WebFetch op zoveel mogelijk betrouwbare sites (IR-site van het bedrijf, SEC-filings, persberichten, Reuters, AP,
 Bloomberg, CNBC, WSJ, FT, vakmedia, toezichthouders zoals FDA/FTC/EU) naar: recent nieuws,
