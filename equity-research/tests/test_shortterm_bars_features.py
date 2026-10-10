@@ -84,3 +84,28 @@ def test_rounding_noise_in_adjusted_bars_is_not_an_error():
     assert not any("high below" in p for p in validate(bars))
     bad = make_bars("X", [100.0, 100.0], highs=[100.0, 98.0])
     assert any("high below" in p for p in validate(bad))
+
+
+def test_no_feature_looks_into_the_future():
+    """Every feature on day t must be identical whether or not later bars exist."""
+    from equity_research.shortterm import features
+    from shortterm_fakes import planted_universe
+    b = planted_universe(n_tickers=1, n_days=400, seed=9)["T00"]
+    full = features.compute(b)
+    for t in (260, 300, 399):
+        cut = features.compute(b.until(b.dates[t]))
+        for name, values in full.items():
+            a, c = values[t], cut[name][t]
+            assert (np.isnan(a) and np.isnan(c)) or a == pytest.approx(c), (name, t)
+
+
+def test_new_trend_and_momentum_features_hand_calculated():
+    from equity_research.shortterm import features
+    closes = np.arange(1, 301, dtype=float)
+    b = make_bars("X", closes)
+    f = features.compute(b)
+    t = 299
+    assert f["mom_12_1"][t] == pytest.approx(closes[t - 21] / closes[t - 252] - 1)
+    assert f["ma50_dist"][t] == pytest.approx(closes[t] / closes[t - 49:t + 1].mean() - 1)
+    assert f["ma200_dist"][t] == pytest.approx(closes[t] / closes[t - 199:t + 1].mean() - 1)
+    assert f["ret_60d"][t] == pytest.approx(closes[t] / closes[t - 60] - 1)

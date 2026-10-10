@@ -110,3 +110,49 @@ def test_times_earlier_than_the_filing_page_are_dropped():
     index = {filings[0].url: filings[0].accepted + timedelta(hours=3)}  # data says earlier than the truth
     kept, status = catalysts.calibrate_times(filings, lambda url: index[url])
     assert kept == [] and status.startswith("unreliable")
+
+
+def test_company_reads_older_submission_files_and_sic():
+    import json
+    from equity_research.shortterm.sources import Listing, ShortTermSources
+    older = {"accessionNumber": ["A-0"], "form": ["8-K"], "items": ["2.02"],
+             "acceptanceDateTime": ["2015-02-03T21:30:00.000Z"], "filingDate": ["2015-02-03"]}
+    main = dict(SUBMISSIONS, sic="3571", filings=dict(SUBMISSIONS["filings"],
+                files=[{"name": "CIK0000000042-submissions-001.json"}]))
+    every = catalysts.parse_submissions(main, "SYN") + catalysts.parse_submissions(
+        {"cik": "42", "filings": {"recent": older}}, "SYN")
+    true_time = {f.url: f.accepted for f in every}
+
+    class Fake(ShortTermSources):
+        def __init__(self):
+            self.urls = []
+
+        def _get(self, url, max_age):
+            self.urls.append(url)
+            return json.dumps(older if url.endswith("-001.json") else main).encode()
+
+        def accepted_on_index(self, url):
+            return true_time[url]
+
+    fake = Fake()
+    company = fake.company(Listing("SYN", "0000000042", "SYNTHETIC CO", "Nasdaq"), full_history=True)
+    assert company.sic == "3571" and company.timing == "verified"
+    assert [f.accession for f in company.filings] == ["A-0", "A-4", "A-1", "A-3"]
+    assert fake.urls[1].endswith("CIK0000000042-submissions-001.json")
+
+
+def test_earnings_reaction_flag_covers_close_to_close():
+    bars = make_bars("SYN", [10] * 5, start=date(2020, 1, 6))
+    day = {d: i for i, d in enumerate(bars.dates)}
+    f = catalysts.features(bars, catalysts.parse_submissions(SUBMISSIONS, "SYN"))
+    # earnings 16:30 ET Tue 7 Jan: the market reacts on Wed 8 Jan -> flag on the row of 8 Jan (known at its close)
+    assert f["cat_reaction_earnings"][day[date(2020, 1, 8)]] == 1
+    assert f["cat_reaction_earnings"][day[date(2020, 1, 7)]] == 0
+    assert f["cat_reaction_earnings"][day[date(2020, 1, 9)]] == 0
+    # an earnings release at 15:00 ET on Thu 9 Jan (before the close) is the reaction of 9 Jan itself
+    intraday = Filing("SYN", "42", "E", "8-K", ("2.02",), datetime(2020, 1, 9, 20, 0, tzinfo=timezone.utc), "u")
+    g = catalysts.features(bars, [intraday])
+    assert g["cat_reaction_earnings"][day[date(2020, 1, 9)]] == 1
+    # one second after Thursday's close it belongs to Friday
+    after = Filing("SYN", "42", "E", "8-K", ("2.02",), datetime(2020, 1, 9, 21, 0, 1, tzinfo=timezone.utc), "u")
+    assert catalysts.features(bars, [after])["cat_reaction_earnings"][day[date(2020, 1, 10)]] == 1
