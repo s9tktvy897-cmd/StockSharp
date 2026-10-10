@@ -158,7 +158,7 @@ def simulate(market: MarketData, picks: dict[date, list[tuple[str, float]]], cal
         nonlocal cash, traded_value
         a = market.arrays(p.ticker)
         gross_value = p.shares * price
-        c = costs.per_side(gross_value, a["dv20"][j], a["vol20"][j], a["cs20"][j])
+        c = costs.per_side(gross_value, a["dv20"][j], a["vol20"][j], float(market.bars[p.ticker].traded_close[j]))
         proceeds = gross_value * (1 - c)
         cash += proceeds
         traded_value += gross_value
@@ -177,7 +177,7 @@ def simulate(market: MarketData, picks: dict[date, list[tuple[str, float]]], cal
             if value < lim.min_order_value:
                 cancelled["fill too small (volume or cash)"] += 1
                 continue
-            c = costs.per_side(value, o.dollar_volume, o.daily_vol, a["cs20"][j - 1] if j else np.nan)
+            c = costs.per_side(value, o.dollar_volume, o.daily_vol, o.price)
             price = b.open[j] * (1 + c)
             positions.append(Position(o.ticker, o.signal_date, day, j, j + rule.horizon - 1, value / price, value,
                                       b.open[j], value < o.value * 0.999, c))
@@ -253,7 +253,7 @@ def simulate(market: MarketData, picks: dict[date, list[tuple[str, float]]], cal
                     continue
                 a = market.arrays(ticker)
                 b = market.bars[ticker]
-                spread = a["cs20"][i] if np.isfinite(a["cs20"][i]) else 2 * costs.half_spread(a["dv20"][i], None)
+                spread = 2 * costs.half_spread(a["dv20"][i], float(b.traded_close[i]))
                 orders.append(Order(ticker, day, score, equity / rule.horizon / top_n, float(b.traded_close[i]),
                                     float(a["dv20"][i]), float(a["vol20"][i]), float(spread),
                                     market.sectors.get(ticker, "unknown")))

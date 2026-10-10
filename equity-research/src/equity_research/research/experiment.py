@@ -62,11 +62,8 @@ def prepare(inputs: Inputs, config: Config | None = None) -> Prepared:
     # per-row cost estimate for the model labels (no impact: the order size is not known yet)
     cost = np.empty(len(panel.dates))
     model = CostModel()
-    for t in np.unique(panel.tickers):
-        idx = np.where(panel.tickers == t)[0]
-        a = market.arrays(t)
-        cs = a["cs20"][panel.rows[idx]]
-        cost[idx] = [model.per_side(0.0, dv, 0.0, s) for dv, s in zip(panel.dollar_volume[idx], cs)]
+    for k in range(len(cost)):
+        cost[k] = model.per_side(0.0, float(panel.dollar_volume[k]), 0.0, float(panel.price[k]))
     labels = {}
     for h in HORIZONS:
         o = panel.outcomes[h]

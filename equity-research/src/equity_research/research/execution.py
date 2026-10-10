@@ -1,8 +1,10 @@
 """Transaction cost and fill model (per side, as a fraction of the price).
 
 cost = commission + slippage + half-spread + market impact, times a stress multiplier.
-- half-spread: the larger of a liquidity tier (by 20-day dollar volume) and half the stock's own
-  Corwin-Schultz high-low spread estimate (``stats.corwin_schultz``), so volatile small caps pay more;
+- half-spread: the larger of a liquidity tier (by 20-day dollar volume) and half a one-cent tick
+  (0.005 / price), so low-priced stocks pay at least their minimum quoted spread. (Protocol amendment 1:
+  the Corwin-Schultz high-low estimator used first overstates spreads of liquid stocks by an order of
+  magnitude -- 0.38% for AAPL against a quoted spread near 0.01% -- and is kept only as a diagnostic.)
 - impact: square-root law, ``IMPACT_COEF * daily volatility * sqrt(order value / daily dollar volume)``;
 - fills: at most ``max_participation`` of the fill day's dollar volume (the rest is not filled); no
   bar on the fill day (halt, missing data) = order not filled.
@@ -14,6 +16,7 @@ import math
 from dataclasses import dataclass, replace
 
 IMPACT_COEF = 0.5  # square-root impact coefficient (typical estimates 0.3-1.0; an assumption)
+TICK = 0.01        # US minimum price increment for stocks above $1
 
 
 @dataclass(frozen=True)
@@ -24,17 +27,18 @@ class CostModel:
     impact_coef: float = IMPACT_COEF
     stress: float = 1.0  # multiplier on everything except commission
     max_participation: float = 0.01
+    tick: float = TICK  # minimum quoted spread in currency (0 = no tick floor)
 
-    def half_spread(self, dollar_volume: float, cs_spread: float | None) -> float:
+    def half_spread(self, dollar_volume: float, price: float | None) -> float:
         tier = next((bps for floor, bps in self.tiers if dollar_volume >= floor), self.tiers[-1][1]) / 1e4
-        own = cs_spread / 2 if cs_spread is not None and math.isfinite(cs_spread) else 0.0
-        return max(tier, own)
+        tick = self.tick / 2 / price if price is not None and math.isfinite(price) and price > 0 else 0.0
+        return max(tier, tick)
 
-    def per_side(self, order_value: float, dollar_volume: float, daily_vol: float, cs_spread: float | None) -> float:
+    def per_side(self, order_value: float, dollar_volume: float, daily_vol: float, price: float | None) -> float:
         participation = order_value / dollar_volume if dollar_volume > 0 else 1.0
         vol = daily_vol if math.isfinite(daily_vol) else 0.0
         impact = self.impact_coef * vol * math.sqrt(max(participation, 0.0))
-        variable = self.slippage_bps / 1e4 + self.half_spread(dollar_volume, cs_spread) + impact
+        variable = self.slippage_bps / 1e4 + self.half_spread(dollar_volume, price) + impact
         return self.commission_bps / 1e4 + self.stress * variable
 
     def stressed(self, factor: float) -> "CostModel":

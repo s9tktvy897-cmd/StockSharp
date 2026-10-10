@@ -37,7 +37,7 @@ rows, sampled with a fixed seed). For the holdout they are trained on the develo
 Decision after the close of t with data up to t (8-Ks up to 09:00 ET of t+1); buy at the open of
 t+1; sell at the close of t+h. Costs per side: slippage 10 bp + half-spread (the larger of a
 liquidity tier 5/15/30 bp and half the stock's Corwin-Schultz spread) + square-root impact
-(0.5 x daily volatility x sqrt(order / daily dollar volume)). Fills capped at 1% of the fill day's
+(0.5 x daily volatility x sqrt(order / daily dollar volume)). *Amended before the main run, see below: half-spread = max(tier, half a one-cent tick).* Fills capped at 1% of the fill day's
 dollar volume; no bar on the fill day = not filled; a history that ends early is closed at its last
 close and counted. Cost stress: 1x, 2x, 3x.
 
@@ -88,3 +88,14 @@ after Holm, or fails the holdout) / PAPER TRADING CANDIDATE (passes everything) 
 VALIDATED (a candidate with >= 100 closed paper trades over >= 3 months and a mean net return whose
 95% interval lies above zero). No strategy is promoted on a single backtest. If nothing reaches
 PAPER TRADING CANDIDATE, the verdict is **NO PROVEN EDGE**.
+
+## Amendments (made before the main run; each with its reason)
+
+1. **2026-10-10, spread model.** The half-spread was "the larger of a liquidity tier and half the
+   stock's Corwin-Schultz high-low spread". A check on real data before the main run (smoke run on
+   80 tickers, no results used) showed the estimator at 0.38% for AAPL, 0.38% for MSFT and 0.41% for
+   JPM, against quoted spreads near 0.01%: it overstates spreads of liquid stocks by an order of
+   magnitude, which would have made every strategy look worse than it is. Replaced by: the larger of
+   the liquidity tier (5 / 15 / 30 bp) and half a one-cent tick (0.005 / price), so a $2 stock still
+   pays at least 0.25% per side. The risk layer's spread limit uses the same estimate. Corwin-Schultz
+   stays in `research/stats.py` as a diagnostic only. Thresholds, variants and periods are unchanged.

@@ -15,8 +15,10 @@ def test_cost_model_hand_calculated():
     m = CostModel(commission_bps=1, slippage_bps=10, tiers=((10e6, 5.0), (0.0, 30.0)), impact_coef=0.5)
     # liquid stock, tiny order: 1 + 10 + 5 bp, impact 0.5 * 2% * sqrt(1e4/1e8) = 0.0001
     assert m.per_side(1e4, 1e8, 0.02, None) == pytest.approx((1 + 10 + 5) / 1e4 + 0.0001)
-    # own spread estimate of 2% beats the tier: half-spread 1%
-    assert m.per_side(1e4, 1e8, 0.0, 0.02) == pytest.approx((1 + 10) / 1e4 + 0.01)
+    # a $0.50 stock: half a one-cent tick is 1%, more than the tier
+    assert m.per_side(1e4, 1e8, 0.0, 0.50) == pytest.approx((1 + 10) / 1e4 + 0.01)
+    # a $100 stock: the tick floor (0.005%) is below the 5 bp tier
+    assert m.per_side(1e4, 1e8, 0.0, 100.0) == pytest.approx((1 + 10 + 5) / 1e4)
     # stress doubles everything but commission
     assert m.stressed(2.0).per_side(1e4, 1e8, 0.0, None) == pytest.approx(1 / 1e4 + 2 * 15 / 1e4)
 
@@ -87,7 +89,7 @@ def _market(prices: dict[str, tuple], start=date(2024, 1, 1)):
     return MarketData(universe)
 
 
-NO_COST = CostModel(slippage_bps=0, tiers=((0.0, 0.0),), impact_coef=0.0)
+NO_COST = CostModel(slippage_bps=0, tiers=((0.0, 0.0),), impact_coef=0.0, tick=0.0)
 LOOSE = RiskLimits(max_position=1.0, risk_per_position=10.0, max_spread=1.0, max_sector=1.0, min_dollar_volume=0)
 
 
